@@ -1,0 +1,60 @@
+{
+  "entities": {
+    "employee": {
+      "title": "Employee",
+      "description": "Represents an employee in the trip",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 256 },
+        "gender": { "type": "string", "enum": ["ชาย", "หญิง"] },
+        "department": { "type": "string", "maxLength": 256 },
+        "roomNumber": { "type": "string", "maxLength": 64 },
+        "rsvpStatus": { "type": "string", "enum": ["ไป", "ไม่ไป", "ยังไม่ระบุ"] },
+        "checkedIn": { "type": "boolean" }
+      },
+      "required": ["id", "name", "gender", "department", "roomNumber"]
+    },
+    "room": {
+      "title": "Room",
+      "description": "Represents a hotel room",
+      "type": "object",
+      "properties": {
+        "roomNumber": { "type": "string", "maxLength": 64 },
+        "roomType": { "type": "string", "maxLength": 128 },
+        "capacity": { "type": "number" },
+        "genderRestriction": { "type": "string", "enum": ["ชายล้วน", "หญิงล้วน", "ไม่จำกัด"] },
+        "pricePerNight": { "type": "number" },
+        "floor": { "type": "number" },
+        "notes": { "type": "string", "maxLength": 1024 }
+      },
+      "required": ["roomNumber", "roomType", "capacity", "genderRestriction", "pricePerNight", "floor"]
+    },
+    "setting": {
+      "title": "Setting",
+      "description": "Global application settings",
+      "type": "object",
+      "properties": {
+        "rsvpClosed": { "type": "boolean" },
+        "spreadsheetId": { "type": "string", "maxLength": 256 },
+        "spreadsheetName": { "type": "string", "maxLength": 256 },
+        "spreadsheetUrl": { "type": "string", "maxLength": 1024 }
+      },
+      "required": ["rsvpClosed"]
+    }
+  },
+  "firestore": {
+    "/employees/{employeeId}": {
+      "schema": "employee",
+      "description": "List of employees and their booking state"
+    },
+    "/rooms/{roomId}": {
+      "schema": "room",
+      "description": "Available rooms"
+    },
+    "/settings/{settingId}": {
+      "schema": "setting",
+      "description": "Global settings document"
+    }
+  }
+}
