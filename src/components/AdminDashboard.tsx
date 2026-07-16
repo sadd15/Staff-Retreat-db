@@ -1,6 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Employee, Room, SheetConfig } from '../types';
-import { Html5Qrcode } from 'html5-qrcode';
 import {
   Grid,
   Users,
@@ -83,7 +82,7 @@ export default function AdminDashboard({
   onToggleRSVPClosed,
   isOfflineMode = false,
 }: AdminDashboardProps) {
-  const [activeSubTab, setActiveSubTab] = useState<'layout' | 'list' | 'settings' | 'summary'>('layout');
+  const [activeSubTab, setActiveSubTab] = useState<'layout' | 'settings'>('layout');
   const [resetting, setResetting] = useState(false);
   const [editingRoom, setEditingRoom] = useState<Room | null>(null);
   const [deletingRoomId, setDeletingRoomId] = useState<string | null>(null);
@@ -187,7 +186,7 @@ export default function AdminDashboard({
 
   // Sort rooms: Full rooms (Sold Out) at the end
   const sortedRooms = useMemo(() => {
-    const list = empSearchQuery ? filteredRoomsBySearch : rooms;
+    const list = rooms;
     return [...list].sort((a, b) => {
       const aOccs = stats.occupantsByRoom[a.id] || [];
       const bOccs = stats.occupantsByRoom[b.id] || [];
@@ -484,7 +483,7 @@ export default function AdminDashboard({
     <div className="max-w-7xl mx-auto px-4 py-6 font-sans" id="admin-dashboard">
       
       {/* Top statistics panel */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6" id="stats-dashboard-grid">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6" id="stats-dashboard-grid">
         <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex items-center gap-3.5 hover:border-slate-300 transition-all">
           <div className="w-11 h-11 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 border border-indigo-100/50">
             <Users className="w-5 h-5" />
@@ -740,24 +739,6 @@ export default function AdminDashboard({
             ผังห้องพักเรียลไทม์
           </button>
           <button
-            onClick={() => setActiveSubTab('list')}
-            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 shrink-0 ${
-              activeSubTab === 'list' ? 'bg-white text-indigo-600 shadow-xs border border-slate-200/50' : 'text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <Users className="w-3.5 h-3.5" />
-            ตารางจองรายห้อง
-          </button>
-          <button
-            onClick={() => setActiveSubTab('summary')}
-            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 shrink-0 ${
-              activeSubTab === 'summary' ? 'bg-white text-indigo-600 shadow-xs border border-slate-200/50' : 'text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <FileText className="w-3.5 h-3.5" />
-            สรุปข้อมูล (ส่ง Line)
-          </button>
-          <button
             onClick={() => setActiveSubTab('settings')}
             className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 shrink-0 ${
               activeSubTab === 'settings' ? 'bg-white text-indigo-600 shadow-xs border border-slate-200/50' : 'text-slate-500 hover:text-slate-800'
@@ -788,8 +769,8 @@ export default function AdminDashboard({
         </div>
       </div>
 
-      {/* Search Bar for Layout & List subtabs */}
-      {(activeSubTab === 'layout' || activeSubTab === 'list') && (
+      {/* Search Bar for Layout subtab */}
+      {activeSubTab === 'layout' && (
         <div className="mb-6 relative max-w-md">
           <Search className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
           <input
@@ -841,7 +822,7 @@ export default function AdminDashboard({
                 </span>
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3.5">
                 {!empSearchQuery && (
                   <button
                     onClick={handleAddNewRoom}
@@ -1045,528 +1026,7 @@ export default function AdminDashboard({
         </div>
       )}
 
-      {/* Subtab content 2: Compact bookings spreadsheet style list */}
-      {activeSubTab === 'list' && (
-        <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <h3 className="text-xl font-display font-black text-slate-800">ตารางจองรายห้อง</h3>
-              <p className="text-xs text-slate-500 mt-1">รายงานสรุปผู้เข้าพักแยกตามห้องพัก สามารถส่งออกและคัดลอกเป็นรูปภาพได้</p>
-            </div>
-            
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleExportRoomsCsv}
-                className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-xl text-xs font-bold transition-all border border-emerald-100 shadow-3xs"
-              >
-                <Download className="w-3.5 h-3.5" />
-                ส่งออก CSV
-              </button>
-              <button
-                onClick={() => handleCopySummaryImage('room-table-capture-area')}
-                className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-xl text-xs font-bold transition-all border border-indigo-100 shadow-3xs"
-              >
-                <Copy className="w-3.5 h-3.5" />
-                คัดลอกเป็นรูปภาพ
-              </button>
-            </div>
-          </div>
-
-          <div 
-            id="room-table-capture-area" 
-            className="bg-white rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden p-6"
-          >
-            <div className="mb-6 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-indigo-600 flex items-center justify-center text-white shadow-lg shadow-indigo-100">
-                  <Hotel className="w-5 h-5" />
-                </div>
-                <div>
-                  <h4 className="text-base font-display font-extrabold text-slate-800">สรุปการจัดห้องพักพนักงาน</h4>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Employee Room Assignment Summary</p>
-                </div>
-              </div>
-              <div className="text-right">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">ข้อมูล ณ วันที่</p>
-                <p className="text-xs font-black text-slate-800">{new Date().toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
-              </div>
-            </div>
-
-            <div className="overflow-x-auto rounded-2xl border border-slate-100 shadow-3xs">
-              {/* Desktop View Table */}
-              <table className="hidden md:table w-full text-left text-xs border-collapse table-auto">
-                <thead>
-                  <tr className="bg-slate-50/80 text-slate-500 font-bold uppercase text-[9px] tracking-widest border-b border-slate-100">
-                    <th className="px-6 py-4 font-display whitespace-nowrap w-[180px]">ห้องพัก / ประเภท</th>
-                    <th className="px-6 py-4 font-display whitespace-nowrap w-[150px]">เงื่อนไข / ความจุ</th>
-                    <th className="px-6 py-4 font-display min-w-[300px]">รายชื่อผู้เข้าพักในห้อง</th>
-                    <th className="px-6 py-4 font-display text-center whitespace-nowrap w-[140px]">สถานะ</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                  {rooms.length === 0 ? (
-                    <tr>
-                      <td colSpan={4} className="px-6 py-12 text-center text-slate-400 font-medium italic">
-                        ยังไม่มีห้องพักในระบบ
-                      </td>
-                    </tr>
-                  ) : (empSearchQuery ? filteredRoomsBySearch : rooms).length === 0 ? (
-                    <tr>
-                      <td colSpan={4} className="px-6 py-12 text-center text-slate-400 font-medium italic">
-                        ไม่พบห้องพักตามข้อมูลพนักงานที่ค้นหา
-                      </td>
-                    </tr>
-                  ) : (
-                    sortedRooms.map((room, index) => {
-                      const occupants = stats.occupantsByRoom[room.id] || [];
-                      const count = occupants.length;
-                      const isFull = count >= room.capacity;
-                      const isEmpty = count === 0;
-  
-                      return (
-                        <tr key={room.id} className="hover:bg-indigo-50/20 transition-colors group">
-                          <td className="px-6 py-5 align-top">
-                            <div className="flex flex-col whitespace-nowrap">
-                              <span className="font-display font-black text-slate-800 text-sm">ห้องที่ {index + 1}</span>
-                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">{room.roomType}</span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-5 align-top">
-                            <div className="flex flex-col gap-2 whitespace-nowrap">
-                              <div className="flex items-center">
-                                <span className={`text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-wider border ${
-                                  room.genderRestriction === 'ชายล้วน' ? 'bg-blue-50 text-blue-600 border-blue-100' :
-                                  room.genderRestriction === 'หญิงล้วน' ? 'bg-rose-50 text-rose-600 border-rose-100' :
-                                  'bg-indigo-50 text-indigo-600 border-indigo-100'
-                                }`}>
-                                  {room.genderRestriction}
-                                </span>
-                              </div>
-                              <span className="text-[10px] text-slate-500 font-bold flex items-center gap-1">
-                                <Users className="w-3 h-3 text-slate-300" />
-                                ความจุ {room.capacity} คน
-                              </span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-5 align-top">
-                            {isEmpty ? (
-                              <div className="flex items-center gap-2 text-slate-300 py-1">
-                                <UserX className="w-4 h-4" />
-                                <span className="text-[11px] font-medium italic">ยังไม่มีผู้เข้าพัก</span>
-                              </div>
-                            ) : (
-                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                                {occupants.map(o => (
-                                  <div
-                                    key={o.id}
-                                    className="bg-white text-slate-700 px-3 py-2 rounded-xl text-[10px] font-black flex items-center gap-2 border border-slate-100 shadow-3xs group-hover:border-indigo-100 transition-all hover:shadow-xs"
-                                  >
-                                    <div className={`w-2 h-2 rounded-full shrink-0 ${o.gender === 'หญิง' ? 'bg-rose-400' : 'bg-blue-400'}`} />
-                                    <div className="flex flex-col min-w-0">
-                                      <span className="truncate leading-tight">{o.name}</span>
-                                      <span className="text-[8px] text-slate-400 font-bold leading-tight uppercase opacity-70 truncate">{o.department}</span>
-                                    </div>
-                                    <button
-                                      type="button"
-                                      onClick={() => setCancelingEmp(o)}
-                                      className="hide-in-export ml-auto text-slate-300 hover:text-rose-500 rounded p-1 transition-colors cursor-pointer"
-                                      title="ยกเลิกการจอง"
-                                    >
-                                      <X className="w-3.5 h-3.5" />
-                                    </button>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </td>
-                          <td className="px-6 py-5 text-center align-top">
-                            <div className="flex flex-col items-center gap-1.5 mt-1">
-                              {isFull ? (
-                                <span className="text-rose-600 bg-rose-50 border border-rose-100 font-black px-3 py-1 rounded-full text-[9px] uppercase tracking-widest shadow-3xs">
-                                  เต็มแล้ว
-                                </span>
-                              ) : isEmpty ? (
-                                <span className="text-slate-400 bg-slate-50 border border-slate-100 font-bold px-3 py-1 rounded-full text-[9px] uppercase tracking-widest">
-                                  ห้องว่าง
-                                </span>
-                              ) : (
-                                <span className="text-amber-700 bg-amber-50 border border-amber-100 font-black px-3 py-1 rounded-full text-[9px] uppercase tracking-widest shadow-3xs">
-                                  เหลือ {room.capacity - count} ที่
-                                </span>
-                              )}
-                              <div className="w-20 h-1.5 bg-slate-100 rounded-full overflow-hidden shadow-inner">
-                                <div 
-                                  className={`h-full transition-all duration-500 ${isFull ? 'bg-rose-500' : isEmpty ? 'bg-slate-200' : 'bg-amber-500'}`} 
-                                  style={{ width: `${(count / room.capacity) * 100}%` }}
-                                />
-                              </div>
-                              <span className="text-[9px] font-black text-slate-400 tracking-tighter">{count} / {room.capacity}</span>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-
-              {/* Mobile View Cards */}
-              <div className="md:hidden divide-y divide-slate-100">
-                {(empSearchQuery ? filteredRoomsBySearch : rooms).length === 0 ? (
-                  <div className="p-12 text-center text-slate-400 font-medium italic text-xs">
-                    ไม่พบข้อมูลห้องพัก
-                  </div>
-                ) : (
-                  sortedRooms.map((room, index) => {
-                    const occupants = stats.occupantsByRoom[room.id] || [];
-                    const count = occupants.length;
-                    const isFull = count >= room.capacity;
-                    const isEmpty = count === 0;
-
-                    return (
-                      <div key={room.id} className="p-4 space-y-4">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <h5 className="text-sm font-black text-slate-800">ห้องที่ {index + 1}</h5>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{room.roomType}</p>
-                          </div>
-                          <div className="text-right">
-                             <div className={`text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-wider border inline-block ${
-                                room.genderRestriction === 'ชายล้วน' ? 'bg-blue-50 text-blue-600 border-blue-100' :
-                                room.genderRestriction === 'หญิงล้วน' ? 'bg-rose-50 text-rose-600 border-rose-100' :
-                                'bg-indigo-50 text-indigo-600 border-indigo-100'
-                              }`}>
-                                {room.genderRestriction}
-                              </div>
-                              <p className="text-[9px] text-slate-400 mt-1 font-bold">ความจุ {room.capacity} ท่าน</p>
-                          </div>
-                        </div>
-
-                        <div className="space-y-2">
-                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">รายชื่อผู้เข้าพัก ({count}/{room.capacity}):</p>
-                          {isEmpty ? (
-                            <p className="text-[10px] text-slate-300 italic py-1">ยังไม่มีผู้เข้าพัก</p>
-                          ) : (
-                            <div className="grid grid-cols-1 gap-2">
-                              {occupants.map(o => (
-                                <div key={o.id} className="flex items-center justify-between p-2 bg-slate-50 rounded-lg border border-slate-100">
-                                  <div className="flex items-center gap-2">
-                                    <div className={`w-1.5 h-1.5 rounded-full ${o.gender === 'หญิง' ? 'bg-rose-400' : 'bg-blue-400'}`} />
-                                    <span className="text-[10px] font-bold text-slate-700">{o.name}</span>
-                                    <span className="text-[8px] text-slate-400">({o.department})</span>
-                                  </div>
-                                  <button onClick={() => setCancelingEmp(o)} className="text-slate-300 hover:text-rose-500">
-                                    <X className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="flex items-center justify-between pt-2 border-t border-slate-50">
-                           <div className="w-32 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                              <div 
-                                className={`h-full transition-all duration-500 ${isFull ? 'bg-rose-500' : isEmpty ? 'bg-slate-200' : 'bg-amber-500'}`} 
-                                style={{ width: `${(count / room.capacity) * 100}%` }}
-                              />
-                            </div>
-                            {isFull ? (
-                              <span className="text-rose-600 text-[9px] font-black uppercase">เต็มแล้ว</span>
-                            ) : isEmpty ? (
-                              <span className="text-slate-400 text-[9px] font-black uppercase">ว่าง</span>
-                            ) : (
-                              <span className="text-amber-600 text-[9px] font-black uppercase">เหลือ {room.capacity - count} ที่</span>
-                            )}
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-
-            <div className="mt-6 pt-6 border-t border-slate-100 flex justify-between items-center text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-              <div>Trip Room Management System</div>
-              <div className="flex items-center gap-4">
-                <span>จองแล้ว: {stats.bookedCount} คน</span>
-                <span>ว่าง: {stats.totalCapacity - stats.bookedCount} เตียง</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-
-
-
-      {/* Subtab content 3: Summary table to copy */}
-      {activeSubTab === 'summary' && (
-        <div className="space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <div>
-              <h3 className="text-base font-bold text-slate-800 font-display">สรุปข้อมูล (สำหรับส่ง Line)</h3>
-              <p className="text-xs text-slate-500 mt-1">รายงานสรุปข้อมูลครบถ้วน สามารถคัดลอกรูปภาพหรือดาวน์โหลดเพื่อส่งต่อได้เลย</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => handleCopySummaryImage('summary-table-container')}
-                className="hide-in-export bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2"
-              >
-                <Copy className="w-4 h-4" />
-                คัดลอกรูปทั้งหมด
-              </button>
-              <button
-                onClick={() => handleDownloadSummaryImage('summary-table-container', 'Trip-Summary-All')}
-                className="hide-in-export bg-slate-800 text-white hover:bg-slate-700 px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2"
-              >
-                <Download className="w-4 h-4" />
-                โหลดรูปทั้งหมด
-              </button>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-3xl border border-slate-200 p-6 overflow-x-auto shadow-sm">
-            <div id="summary-table-container" className="min-w-[700px] p-8 bg-white max-w-4xl mx-auto border border-slate-100 shadow-sm rounded-2xl">
-              <div className="mb-8 text-center border-b border-slate-200 pb-6">
-                <h2 className="text-2xl font-bold text-slate-800 font-display uppercase tracking-wider">รายงานสรุปทริปประจำปี</h2>
-                <p className="text-sm text-slate-500 mt-2">ข้อมูล ณ วันที่: {new Date().toLocaleString('th-TH')}</p>
-              </div>
-
-              {/* 1. Executive Summary & Department Breakdown */}
-              <div id="summary-section-1" className="mb-8 p-6 -mx-6 bg-white rounded-2xl relative group hover:ring-2 hover:ring-slate-100 transition-all">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-base font-bold text-slate-800 font-display flex items-center gap-2">
-                    <span className="w-6 h-6 rounded-md bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs">1</span>
-                    สรุปภาพรวมผู้ร่วมเดินทางและการเข้าร่วมรายแผนก
-                  </h3>
-                  <button onClick={() => handleCopySummaryImage('summary-section-1')} className="hide-in-export opacity-0 group-hover:opacity-100 flex items-center gap-1.5 text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1.5 rounded hover:bg-indigo-100 transition-opacity">
-                    <Copy className="w-3 h-3" /> คัดลอกส่วนนี้
-                  </button>
-                </div>
-                <div className="grid grid-cols-4 gap-4 mb-6">
-                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-center">
-                    <p className="text-xs font-bold text-slate-500 mb-1">พนักงานทั้งหมด</p>
-                    <p className="text-2xl font-black text-slate-800">{employees.length}</p>
-                  </div>
-                  <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 text-center">
-                    <p className="text-xs font-bold text-emerald-600 mb-1">ตอบรับ (ไป)</p>
-                    <p className="text-2xl font-black text-emerald-700">{employees.filter(e => e.rsvpStatus === 'ไป').length}</p>
-                  </div>
-                  <div className="bg-rose-50 border border-rose-100 rounded-xl p-4 text-center">
-                    <p className="text-xs font-bold text-rose-600 mb-1">ปฏิเสธ (ไม่ไป)</p>
-                    <p className="text-2xl font-black text-rose-700">{employees.filter(e => e.rsvpStatus === 'ไม่ไป').length}</p>
-                  </div>
-                  <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 text-center">
-                    <p className="text-xs font-bold text-amber-600 mb-1">รอยืนยัน</p>
-                    <p className="text-2xl font-black text-amber-700">{employees.filter(e => !e.rsvpStatus || e.rsvpStatus === 'ยังไม่ระบุ').length}</p>
-                  </div>
-                </div>
-
-                <h4 className="text-sm font-bold text-slate-700 mb-3 border-t border-slate-100 pt-4">แยกตามฝ่าย</h4>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  {Object.entries(
-                    employees.reduce((acc, emp) => {
-                      if (!acc[emp.department]) acc[emp.department] = { total: 0, going: 0 };
-                      acc[emp.department].total++;
-                      if (emp.rsvpStatus === 'ไป') acc[emp.department].going++;
-                      return acc;
-                    }, {} as Record<string, {total: number, going: number}>)
-                  ).sort((a, b) => a[0].localeCompare(b[0])).map(([dept, data]) => (
-                    <div key={dept} className="flex justify-between items-center p-3 rounded-lg border border-slate-100 bg-slate-50/50">
-                      <span className="font-bold text-slate-700 text-sm">{dept}</span>
-                      <div className="text-xs font-medium text-slate-500">
-                        ไป <span className="text-emerald-600 font-bold">{data.going}</span> / {data.total}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* 2. Room Assignments (Large) */}
-              <div id="summary-section-3" className="mb-8 p-6 -mx-6 bg-white rounded-2xl relative group hover:ring-2 hover:ring-slate-100 transition-all">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-base font-bold text-slate-800 font-display flex items-center gap-2">
-                    <span className="w-6 h-6 rounded-md bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs">2</span>
-                    รายชื่อผู้เข้าพักและการจัดห้องพัก (รายละเอียด)
-                  </h3>
-                  <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity hide-in-export">
-                    <button onClick={handleExportRoomsCsv} className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1.5 rounded hover:bg-emerald-100 transition-colors">
-                      <Download className="w-3 h-3" /> ส่งออก CSV
-                    </button>
-                    <button onClick={() => handleCopySummaryImage('summary-section-3')} className="flex items-center gap-1.5 text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1.5 rounded hover:bg-indigo-100 transition-colors">
-                      <Copy className="w-3 h-3" /> คัดลอกส่วนนี้
-                    </button>
-                  </div>
-                </div>
-                
-                <div className="mb-4 flex flex-wrap gap-3 text-xs font-medium text-slate-600 bg-slate-50 p-3 rounded-lg border border-slate-200">
-                  <div className="flex-1 text-center border-r border-slate-200">
-                    ห้องทั้งหมด: <span className="font-bold text-slate-800">{stats.totalRooms} ห้อง</span>
-                  </div>
-                  <div className="flex-1 text-center border-r border-slate-200">
-                    มีผู้เข้าพักแล้ว: <span className="font-bold text-emerald-600">{stats.bookedCount} คน</span>
-                  </div>
-                  <div className="flex-1 text-center">
-                    ยังไม่มีห้อง: <span className="font-bold text-amber-600">{employees.filter(e => e.rsvpStatus === 'ไป' && !e.roomId).length} คน</span>
-                  </div>
-                </div>
-
-                <table className="w-full text-left text-sm border-collapse border border-slate-200">
-                  <thead>
-                    <tr className="bg-slate-100 text-slate-700 font-bold">
-                      <th className="px-4 py-3 border border-slate-200 w-1/4">ห้องพัก</th>
-                      <th className="px-4 py-3 border border-slate-200 w-[15%] text-center">ความจุ</th>
-                      <th className="px-4 py-3 border border-slate-200">รายชื่อผู้เข้าพัก</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rooms.length === 0 ? (
-                      <tr>
-                        <td colSpan={3} className="px-4 py-8 text-center text-slate-500 italic">
-                          ยังไม่มีข้อมูลห้องพัก
-                        </td>
-                      </tr>
-                    ) : (
-                      rooms.map((room, index) => {
-                        const occupants = stats.occupantsByRoom[room.id] || [];
-                        return (
-                          <tr key={room.id} className="hover:bg-slate-50">
-                            <td className="px-4 py-3 border border-slate-200 font-bold whitespace-nowrap bg-slate-50/30">
-                              ห้องที่ {index + 1}
-                              <div className="text-[10px] text-slate-400 font-normal mt-1">{room.roomType}</div>
-                              <div className="text-[10px] text-indigo-500 font-normal mt-0.5">{room.genderRestriction}</div>
-                            </td>
-                            <td className="px-4 py-3 border border-slate-200 text-center font-medium text-slate-600 bg-slate-50/30">
-                              {occupants.length} / {room.capacity}
-                            </td>
-                            <td className="px-4 py-3 border border-slate-200">
-                              {occupants.length === 0 ? (
-                                <span className="text-slate-400 italic text-xs">ว่างเปล่า</span>
-                              ) : (
-                                <div className="flex flex-col gap-1.5">
-                                  {occupants.map(o => (
-                                    <div key={o.id} className="text-slate-700 text-xs flex items-center gap-2">
-                                      <span className="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>
-                                      <span className="font-bold">{o.name}</span>
-                                      <span className="text-slate-400">({o.department})</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* 3. Missing / Pending action lists */}
-              <div id="summary-section-4" className="mb-8 p-6 -mx-6 bg-white rounded-2xl relative group hover:ring-2 hover:ring-slate-100 transition-all">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-base font-bold text-slate-800 font-display flex items-center gap-2">
-                    <span className="w-6 h-6 rounded-md bg-rose-100 text-rose-600 flex items-center justify-center text-xs">3</span>
-                    ผู้ที่แจ้งว่าไปแต่ยังไม่ได้จัดห้อง
-                  </h3>
-                  <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity hide-in-export">
-                    <button onClick={handleExportPendingRoomCsv} className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1.5 rounded hover:bg-emerald-100 transition-colors">
-                      <Download className="w-3 h-3" /> ส่งออก CSV
-                    </button>
-                    <button onClick={() => handleCopySummaryImage('summary-section-4')} className="flex items-center gap-1.5 text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1.5 rounded hover:bg-indigo-100 transition-colors">
-                      <Copy className="w-3 h-3" /> คัดลอกส่วนนี้
-                    </button>
-                  </div>
-                </div>
-                {employees.filter(e => e.rsvpStatus === 'ไป' && !e.roomId).length === 0 ? (
-                  <div className="bg-emerald-50 text-emerald-600 p-4 rounded-xl text-center text-sm font-bold border border-emerald-100">
-                    ทุกคนที่แจ้งว่าไป ได้รับการจัดห้องครบแล้ว!
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto border border-slate-200 rounded-xl">
-                    <table className="w-full text-left text-xs border-collapse">
-                      <thead className="bg-rose-50">
-                        <tr className="text-rose-800 font-bold">
-                          <th className="px-3 py-2 w-16 text-center border-b border-r border-rose-100">ลำดับ</th>
-                          <th className="px-3 py-2 border-b border-r border-rose-100">ชื่อ - สกุล</th>
-                          <th className="px-3 py-2 border-b border-rose-100">ฝ่าย</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {employees
-                          .filter(e => e.rsvpStatus === 'ไป' && !e.roomId)
-                          .sort((a, b) => a.department.localeCompare(b.department))
-                          .map((emp, index) => (
-                          <tr key={emp.id} className="border-b border-slate-100 hover:bg-slate-50">
-                            <td className="px-3 py-2 text-center text-slate-500 font-medium border-r border-slate-100">{index + 1}</td>
-                            <td className="px-3 py-2 font-bold text-slate-700 border-r border-slate-100">{emp.name}</td>
-                            <td className="px-3 py-2 text-slate-600">{emp.department}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-
-              {/* 4. Complete RSVP List (Large) */}
-              <div id="summary-section-5" className="mb-8 p-6 -mx-6 bg-white rounded-2xl relative group hover:ring-2 hover:ring-slate-100 transition-all">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-base font-bold text-slate-800 font-display flex items-center gap-2">
-                    <span className="w-6 h-6 rounded-md bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs">4</span>
-                    สถานะการตอบรับของพนักงานทั้งหมด
-                  </h3>
-                  <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity hide-in-export">
-                    <button onClick={handleExportRsvpCsv} className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1.5 rounded hover:bg-emerald-100 transition-colors">
-                      <Download className="w-3 h-3" /> ส่งออก CSV
-                    </button>
-                    <button onClick={() => handleCopySummaryImage('summary-section-5')} className="flex items-center gap-1.5 text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1.5 rounded hover:bg-indigo-100 transition-colors">
-                      <Copy className="w-3 h-3" /> คัดลอกส่วนนี้
-                    </button>
-                  </div>
-                </div>
-                
-                <div className="overflow-x-auto border border-slate-200 rounded-xl">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead className="bg-indigo-50">
-                      <tr className="text-indigo-800 font-bold">
-                        <th className="px-3 py-2 w-16 text-center border-b border-r border-indigo-100">ลำดับ</th>
-                        <th className="px-3 py-2 border-b border-r border-indigo-100">ชื่อ - สกุล</th>
-                        <th className="px-3 py-2 border-b border-r border-indigo-100">ฝ่าย</th>
-                        <th className="px-3 py-2 border-b border-indigo-100">สถานะการตอบรับ</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {[...employees]
-                        .sort((a, b) => {
-                          const statusOrder = { 'ไป': 1, 'ไม่ไป': 2, 'ยังไม่ระบุ': 3, '': 3 };
-                          const aStatus = statusOrder[(a.rsvpStatus as keyof typeof statusOrder) || ''] || 4;
-                          const bStatus = statusOrder[(b.rsvpStatus as keyof typeof statusOrder) || ''] || 4;
-                          if (aStatus !== bStatus) return aStatus - bStatus;
-                          return a.department.localeCompare(b.department);
-                        })
-                        .map((emp, index) => (
-                        <tr key={emp.id} className="border-b border-slate-100 hover:bg-slate-50">
-                          <td className="px-3 py-2 text-center text-slate-500 font-medium border-r border-slate-100">{index + 1}</td>
-                          <td className="px-3 py-2 font-bold text-slate-700 border-r border-slate-100">{emp.name}</td>
-                          <td className="px-3 py-2 text-slate-600 border-r border-slate-100">{emp.department}</td>
-                          <td className="px-3 py-2">
-                            {emp.rsvpStatus === 'ไป' && <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-100">ไป</span>}
-                            {emp.rsvpStatus === 'ไม่ไป' && <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-100">ไม่ไป</span>}
-                            {(!emp.rsvpStatus || emp.rsvpStatus === 'ยังไม่ระบุ') && <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-100">ยังไม่ระบุ</span>}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Subtab content 4: System setup / Google Sheets / RSVP Control */}
 
       {/* Subtab content 4: System setup / Google Sheets / RSVP Control */}
       {activeSubTab === 'settings' && (

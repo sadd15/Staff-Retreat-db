@@ -1,6 +1,6 @@
 {
   "name": "Company Trip Room Booking",
   "description": "ระบบจองที่พักทริปบริษัท เลือกห้องพักและรูมเมทด้วยตนเอง พร้อมสรุปผังห้องพักและงบประมาณแบบเรียลไทม์ ซิงค์ข้อมูลอัตโนมัติผ่าน Google Sheets",
-  "requestFramePermissions": ["camera"],
+  "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

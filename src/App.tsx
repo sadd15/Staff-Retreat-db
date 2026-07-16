@@ -4,6 +4,8 @@ import Header from './components/Header';
 import EmployeeBooking from './components/EmployeeBooking';
 import AdminDashboard from './components/AdminDashboard';
 import TripRSVP from './components/TripRSVP';
+import SummaryReport from './components/SummaryReport';
+import RoomDirectory from './components/RoomDirectory';
 import { initAuth, googleSignIn, getAccessToken, logout } from './lib/authService';
 import { 
   listenToEmployees, 
@@ -42,7 +44,7 @@ export default function App() {
   const [sheetInput, setSheetInput] = useState('');
 
   // Tab Selection
-  const [activeTab, setActiveTab] = useState<'rsvp' | 'booking' | 'admin'>('rsvp');
+  const [activeTab, setActiveTab] = useState<'rsvp' | 'booking' | 'directory' | 'summary' | 'admin'>('rsvp');
   const [googleUser, setGoogleUser] = useState<any>(null);
   const [googleToken, setGoogleToken] = useState<string | null>(null);
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
@@ -486,14 +488,16 @@ export default function App() {
             )}
 
             {/* View switching with smooth animations */}
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={activeTab}
-                initial={{ opacity: 0, y: 15, scale: 0.99 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: -15, scale: 0.99 }}
-                transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-              >
+            <div className="w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8 lg:py-10">
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={activeTab}
+                  initial={{ opacity: 0, y: 15, scale: 0.99 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -15, scale: 0.99 }}
+                  transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                  className="w-full"
+                >
                 {activeTab === 'rsvp' ? (
                   <TripRSVP
                     employees={employees}
@@ -510,6 +514,17 @@ export default function App() {
                     onCancelBooking={handleCancelBooking}
                     syncing={syncing}
                     onUpdateRooms={handleUpdateRooms}
+                  />
+                ) : activeTab === 'directory' ? (
+                  <RoomDirectory
+                    employees={employees}
+                    rooms={rooms}
+                    onCancelBooking={handleCancelBooking}
+                  />
+                ) : activeTab === 'summary' ? (
+                  <SummaryReport 
+                    employees={employees} 
+                    rooms={rooms}
                   />
                 ) : (
                   <AdminDashboard
@@ -534,8 +549,9 @@ export default function App() {
               </motion.div>
             </AnimatePresence>
           </div>
-        )}
-      </main>
+        </div>
+      )}
+    </main>
       {/* Admin PIN Entry Modal */}
       {showPinEntry && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md flex items-center justify-center p-4 z-[100] animate-in fade-in duration-300">

@@ -602,7 +602,7 @@ export default function EmployeeBooking({
       )}
 
       {/* Dynamic Bento Stats Board */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3.5" id="booking-stats-board">
+      <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3.5" id="booking-stats-board">
         
         {/* Total beds */}
         <div className="bg-white p-2.5 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-200 shadow-3xs hover:border-indigo-200 transition-all flex flex-col justify-between">
@@ -1203,7 +1203,7 @@ export default function EmployeeBooking({
                       มีที่ว่างอีก {Number(selectedRoom.capacity) - currentRoomOccupants.length} ที่
                     </span>
                   </div>
-                  <div className="p-3 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                  <div className="p-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
                     {currentRoomOccupants.map(emp => (
                       <div key={emp.id} className="flex items-center gap-2 p-2 bg-slate-50 border border-slate-100 rounded-xl">
                         <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${emp.gender === 'หญิง' ? 'bg-rose-400' : 'bg-blue-400'}`} />
@@ -1217,7 +1217,7 @@ export default function EmployeeBooking({
                 </div>
               )}
 
-              <div className="grid md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 
                 {/* 1. Main Booker Selection (Left) */}
                 <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white">

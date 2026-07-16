@@ -1,6 +1,6 @@
 import React from 'react';
 import { SheetConfig } from '../types';
-import { LogOut, RefreshCw, FileSpreadsheet, ExternalLink, Shield, Users, CalendarCheck, Laptop } from 'lucide-react';
+import { LogOut, RefreshCw, FileSpreadsheet, ExternalLink, Shield, Users, CalendarCheck, FileText, Hotel } from 'lucide-react';
 import { User } from 'firebase/auth';
 
 interface HeaderProps {
@@ -9,8 +9,8 @@ interface HeaderProps {
   onLogout: () => void;
   onRefresh: () => void;
   syncing: boolean;
-  activeTab: 'rsvp' | 'booking' | 'admin';
-  setActiveTab: (tab: 'rsvp' | 'booking' | 'admin') => void;
+  activeTab: 'rsvp' | 'booking' | 'directory' | 'summary' | 'admin';
+  setActiveTab: (tab: 'rsvp' | 'booking' | 'directory' | 'summary' | 'admin') => void;
   isOfflineMode?: boolean;
 }
 
@@ -24,6 +24,14 @@ export default function Header({
   setActiveTab,
   isOfflineMode = false,
 }: HeaderProps) {
+  const tabs = [
+    { id: 'rsvp', label: 'เช็คชื่อ (RSVP)', icon: CalendarCheck },
+    { id: 'booking', label: 'จองห้องพัก', icon: Users },
+    { id: 'directory', label: 'ตารางจองรายห้อง', icon: Hotel },
+    { id: 'summary', label: 'สรุปข้อมูล (ส่ง Line)', icon: FileText },
+    { id: 'admin', label: 'แดชบอร์ดแอดมิน', icon: Shield },
+  ] as const;
+
   return (
     <header className="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-xs" id="app-header">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -45,40 +53,21 @@ export default function Header({
 
           {/* Navigation Tab Buttons */}
           {sheetConfig && (
-            <div className="hidden sm:flex bg-slate-100 p-1 rounded-2xl border border-slate-200" id="header-nav-tabs">
-              <button
-                onClick={() => setActiveTab('rsvp')}
-                className={`px-4 py-2 rounded-xl text-xs font-bold tracking-wide transition-all flex items-center gap-2 ${
-                  activeTab === 'rsvp'
-                    ? 'bg-white text-indigo-600 shadow-xs border border-slate-200/40'
-                    : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                <CalendarCheck className="w-3.5 h-3.5" />
-                เช็คชื่อ (RSVP)
-              </button>
-              <button
-                onClick={() => setActiveTab('booking')}
-                className={`px-4 py-2 rounded-xl text-xs font-bold tracking-wide transition-all flex items-center gap-2 ${
-                  activeTab === 'booking'
-                    ? 'bg-white text-indigo-600 shadow-xs border border-slate-200/40'
-                    : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                <Users className="w-3.5 h-3.5" />
-                จองห้องพัก
-              </button>
-              <button
-                onClick={() => setActiveTab('admin')}
-                className={`px-4 py-2 rounded-xl text-xs font-bold tracking-wide transition-all flex items-center gap-2 ${
-                  activeTab === 'admin'
-                    ? 'bg-white text-indigo-600 shadow-xs border border-slate-200/40'
-                    : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                <Shield className="w-3.5 h-3.5" />
-                แดชบอร์ดแอดมิน
-              </button>
+            <div className="hidden sm:flex bg-slate-100 p-1 rounded-2xl border border-slate-200 overflow-hidden" id="header-nav-tabs">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold tracking-wide transition-all flex items-center gap-2 whitespace-nowrap ${
+                    activeTab === tab.id
+                      ? 'bg-white text-indigo-600 shadow-xs border border-slate-200/40'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  <tab.icon className="w-3.5 h-3.5" />
+                  {tab.label}
+                </button>
+              ))}
             </div>
           )}
 
@@ -153,40 +142,21 @@ export default function Header({
 
         {/* Small screen layout: show navigation buttons under header */}
         {sheetConfig && (
-          <div className="flex sm:hidden py-2 border-t border-slate-100 gap-1.5" id="header-nav-tabs-mobile">
-            <button
-              onClick={() => setActiveTab('rsvp')}
-              className={`flex-1 py-2.5 rounded-xl text-[11px] font-bold transition-all flex items-center justify-center gap-1 ${
-                activeTab === 'rsvp'
-                  ? 'bg-indigo-600 text-white shadow-sm'
-                  : 'text-slate-500 hover:text-slate-800 bg-slate-100'
-              }`}
-            >
-              <CalendarCheck className="w-3.5 h-3.5" />
-              เช็คชื่อ (RSVP)
-            </button>
-            <button
-              onClick={() => setActiveTab('booking')}
-              className={`flex-1 py-2.5 rounded-xl text-[11px] font-bold transition-all flex items-center justify-center gap-1 ${
-                activeTab === 'booking'
-                  ? 'bg-indigo-600 text-white shadow-sm'
-                  : 'text-slate-500 hover:text-slate-800 bg-slate-100'
-              }`}
-            >
-              <Users className="w-3.5 h-3.5" />
-              จองห้องพัก
-            </button>
-            <button
-              onClick={() => setActiveTab('admin')}
-              className={`flex-1 py-2.5 rounded-xl text-[11px] font-bold transition-all flex items-center justify-center gap-1 ${
-                activeTab === 'admin'
-                  ? 'bg-indigo-600 text-white shadow-sm'
-                  : 'text-slate-500 hover:text-slate-800 bg-slate-100'
-              }`}
-            >
-              <Shield className="w-3.5 h-3.5" />
-              แอดมิน
-            </button>
+          <div className="flex sm:hidden py-2 border-t border-slate-100 gap-1.5 overflow-x-auto no-scrollbar" id="header-nav-tabs-mobile">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex-1 min-w-[100px] py-2.5 rounded-xl text-[10px] font-bold transition-all flex items-center justify-center gap-1.5 ${
+                  activeTab === tab.id
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-500 hover:text-slate-800 bg-slate-100'
+                }`}
+              >
+                <tab.icon className="w-3.5 h-3.5" />
+                {tab.label}
+              </button>
+            ))}
           </div>
         )}
       </div>
