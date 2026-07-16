@@ -1,4 +1,4 @@
-# Security Specification: Company Trip Room Booking
+# Security Specification: ระบบจองที่พักพนักงาน (Staff Retreat)
 
 ## 1. Data Invariants
 - An employee document must have valid fields, conforming to types and sizes.

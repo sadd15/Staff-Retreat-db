@@ -37,7 +37,7 @@ export async function createSpreadsheet(accessToken: string, title: string): Pro
     },
     body: JSON.stringify({
       properties: {
-        title: title || 'ระบบจองห้องพักทริปบริษัท (Company Trip Room Booking)',
+        title: title || 'ระบบจองที่พักพนักงาน (Staff Retreat)',
       },
     }),
   });
