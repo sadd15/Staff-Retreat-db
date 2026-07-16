@@ -1336,20 +1336,56 @@ export default function AdminDashboard({
                 </div>
               )}
 
-              <div className="p-5 bg-indigo-50/40 rounded-[1.5rem] border border-indigo-100/60">
-                <h5 className="text-[11px] font-black text-indigo-700 uppercase tracking-wider mb-2 flex items-center gap-2">
-                  <AlertCircle className="w-3.5 h-3.5" /> ข้อแนะนำการเตรียมสเปรดชีต
-                </h5>
-                <ul className="text-[10px] text-indigo-600/80 space-y-2 font-bold leading-relaxed">
-                  <li className="flex gap-2">
-                    <span className="shrink-0">•</span>
-                    ต้องตั้งค่าแชร์ไฟล์เป็น "ทุกคนที่มีลิงก์มีสิทธิ์อ่าน" (Public Link)
-                  </li>
-                  <li className="flex gap-2">
-                    <span className="shrink-0">•</span>
-                    ในไฟล์ต้องมีแท็บชื่อ "Employees" พร้อมคอลัมน์ชื่อพนักงานและฝ่าย
-                  </li>
-                </ul>
+              <div className="p-6 bg-slate-50/70 rounded-[1.5rem] border border-slate-200/80 space-y-4">
+                <div className="flex items-center gap-2 text-indigo-700">
+                  <Sparkles className="w-4 h-4 text-amber-500" />
+                  <h5 className="text-xs font-black uppercase tracking-wider font-display">
+                    คู่มือตั้งค่าเพื่อเชื่อมต่อ Google Sheet ของคุณ 🚀
+                  </h5>
+                </div>
+                
+                <p className="text-[11px] text-slate-500 leading-relaxed font-semibold">
+                  คุณได้อัปโหลดระบบนี้ขึ้น GitHub เรียบร้อยแล้ว! เพื่อให้ระบบสามารถแก้ไขและบันทึกข้อมูลกลับลง Google Sheet ของคุณได้ทันทีโดยไม่ต้องผ่านส่วนกลาง มีขั้นตอนง่าย ๆ ดังนี้ครับ:
+                </p>
+
+                <div className="space-y-3.5 pt-1 text-[11px] text-slate-600">
+                  {/* Step 1 */}
+                  <div className="p-3 bg-white rounded-xl border border-slate-100 shadow-3xs space-y-1">
+                    <p className="font-extrabold text-slate-800 flex items-center gap-1.5">
+                      <span className="w-5 h-5 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center text-[10px] border border-emerald-100">1</span>
+                      ตั้งค่า Google Sheet เป็นสาธารณะ
+                    </p>
+                    <p className="text-[10px] text-slate-500 leading-relaxed pl-6 font-medium">
+                      เปิดไฟล์ Google Sheet ของคุณ &gt; กดปุ่ม <b>"แชร์" (Share)</b> ที่มุมบนขวา &gt; เปลี่ยนสิทธิ์จาก "จำกัด" (Restricted) เป็น <b>"ทุกคนที่มีลิงก์" (Anyone with the link)</b> มีสิทธิ์เป็น <b>"ผู้อ่าน" (Viewer)</b> แล้วก๊อปปี้ลิงก์สเปรดชีตมาวางในช่องด้านบน
+                    </p>
+                  </div>
+
+                  {/* Step 2 */}
+                  <div className="p-3 bg-white rounded-xl border border-slate-100 shadow-3xs space-y-1">
+                    <p className="font-extrabold text-slate-800 flex items-center gap-1.5">
+                      <span className="w-5 h-5 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center text-[10px] border border-indigo-100">2</span>
+                      เปิดใช้งานการเข้าสู่ระบบ Google ใน Firebase
+                    </p>
+                    <p className="text-[10px] text-slate-500 leading-relaxed pl-6 font-medium">
+                      ไปที่ <b>Firebase Console</b> ของคุณ &gt; เมนู <b>Authentication</b> &gt; แท็บ <b>Sign-in method</b> &gt; กด <b>Add new provider</b> &gt; เลือก <b>Google</b> &gt; กด <b>Enable</b> &gt; กรอกอีเมลติดต่อ แล้วกด <b>Save (บันทึก)</b>
+                    </p>
+                  </div>
+
+                  {/* Step 3 */}
+                  <div className="p-3 bg-white rounded-xl border border-slate-100 shadow-3xs space-y-1">
+                    <p className="font-extrabold text-slate-800 flex items-center gap-1.5">
+                      <span className="w-5 h-5 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center text-[10px] border border-amber-100">3</span>
+                      เพิ่มโดเมนของคุณใน Authorized Domains
+                    </p>
+                    <p className="text-[10px] text-slate-500 leading-relaxed pl-6 font-medium">
+                      ในหน้า <b>Authentication</b> &gt; เลือกแท็บ <b>Settings</b> &gt; เมนู <b>Authorized domains</b> &gt; กด <b>Add domain</b> &gt; ใส่ชื่อโดเมนเว็บไซต์ของคุณ (เช่น <span className="font-mono bg-slate-50 px-1 py-0.5 rounded text-amber-600">username.github.io</span> หรือโดเมน Vercel ของคุณ) เพื่ออนุญาตการลงชื่อเข้าใช้ด้วยบัญชี Google
+                    </p>
+                  </div>
+                </div>
+
+                <div className="p-3 bg-indigo-50/50 rounded-xl border border-indigo-100/50 text-[10px] text-indigo-700 font-bold leading-relaxed">
+                  💡 <b>ทำไมระบบต้องการสิ่งนี้?</b> เนื่องจากระบบออกแบบมาเพื่อความปลอดภัยสูงสุดและไร้รอยต่อ บัญชี Google ของแอดมินที่กดบันทึกข้อมูลจะถูกใช้เพื่อขอ Access Token มาเขียนข้อมูลลงชีตโดยตรง (Direct OAuth) ข้อมูลจึงไม่ต้องไหลผ่านเซิร์ฟเวอร์ของผู้อื่น มั่นใจได้ว่าข้อมูลพนักงานปลอดภัย 100% ครับ!
+                </div>
               </div>
             </div>
 
