@@ -56,12 +56,14 @@ interface AdminDashboardProps {
   onResetAllBookings: () => Promise<void>;
   onCancelBooking: (empId: string) => Promise<void>;
   onSyncSheet: (url: string) => Promise<void>;
+  onCleanSyncSheet?: (url: string) => Promise<void>;
   onSyncToSheet: () => Promise<void>;
   onClearSheetConfig: () => Promise<void>;
   onChangePin: () => void;
   rsvpClosed: boolean;
   onToggleRSVPClosed: (closed: boolean) => Promise<void>;
   isOfflineMode?: boolean;
+  onWipeAllEmployees?: () => Promise<void>;
 }
 
 export default function AdminDashboard({
@@ -75,12 +77,14 @@ export default function AdminDashboard({
   onResetAllBookings,
   onCancelBooking,
   onSyncSheet,
+  onCleanSyncSheet,
   onSyncToSheet,
   onClearSheetConfig,
   onChangePin,
   rsvpClosed,
   onToggleRSVPClosed,
   isOfflineMode = false,
+  onWipeAllEmployees,
 }: AdminDashboardProps) {
   const [activeSubTab, setActiveSubTab] = useState<'layout' | 'settings'>('layout');
   const [resetting, setResetting] = useState(false);
@@ -97,6 +101,10 @@ export default function AdminDashboard({
   const [isSyncingSheet, setIsSyncingSheet] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [isEditingSheetUrl, setIsEditingSheetUrl] = useState(false);
+  const [showCleanSyncConfirm, setShowCleanSyncConfirm] = useState(false);
+  const [isPerformingCleanSync, setIsPerformingCleanSync] = useState(false);
+  const [showWipeEmployeesConfirm, setShowWipeEmployeesConfirm] = useState(false);
+  const [isPerformingWipe, setIsPerformingWipe] = useState(false);
 
   const handleConfirmCancelBooking = async () => {
     if (!cancelingEmp) return;
@@ -118,6 +126,16 @@ export default function AdminDashboard({
   const [pricePerNight, setPricePerNight] = useState<number | undefined>(2000);
   const [floor, setFloor] = useState(1);
   const [notes, setNotes] = useState('');
+  const [roomName, setRoomName] = useState('');
+  const [newRoomName, setNewRoomName] = useState('');
+  const [roomSequence, setRoomSequence] = useState<number | undefined>(undefined);
+  const [newRoomSequence, setNewRoomSequence] = useState<number | undefined>(undefined);
+  const [newRoomFloor, setNewRoomFloor] = useState(1);
+
+  const [isSavingRoom, setIsSavingRoom] = useState(false);
+  const [saveRoomError, setSaveRoomError] = useState<string | null>(null);
+  const [isCreatingRoom, setIsCreatingRoom] = useState(false);
+  const [createRoomError, setCreateRoomError] = useState<string | null>(null);
 
   // Calculate statistics
   const stats = useMemo(() => {
@@ -184,20 +202,73 @@ export default function AdminDashboard({
     });
   }, [rooms, empSearchQuery, stats.occupantsByRoom]);
 
-  // Sort rooms: Full rooms (Sold Out) at the end
+  // Sort rooms according to the new requested criteria
   const sortedRooms = useMemo(() => {
-    const list = rooms;
+    const list = empSearchQuery ? filteredRoomsBySearch : rooms;
     return [...list].sort((a, b) => {
-      const aOccs = stats.occupantsByRoom[a.id] || [];
-      const bOccs = stats.occupantsByRoom[b.id] || [];
-      const aFull = aOccs.length >= a.capacity;
-      const bFull = bOccs.length >= b.capacity;
-      
-      if (aFull && !bFull) return 1;
-      if (!aFull && bFull) return -1;
-      return 0;
+      // Parse function to extract houseNumber, sequence, slashNumber, floor
+      const parseRoomSortKey = (room: Room) => {
+        const name = room.roomName || '';
+        const id = room.id || '';
+        const seq = room.sequence !== undefined ? Number(room.sequence) : 9999;
+        const floor = room.floor !== undefined ? Number(room.floor) : 1;
+
+        let houseNumber = 9999;
+        let slashNumber = 0;
+
+        // Look for numbers like "881/1" or "881" in the roomName first
+        const patternMatch = name.match(/(\d+)(?:\/(\d+))?/);
+        if (patternMatch) {
+          houseNumber = Number(patternMatch[1]);
+          if (patternMatch[2]) {
+            slashNumber = Number(patternMatch[2]);
+          }
+        } else {
+          // Fallback to id
+          const idMatch = id.match(/(\d+)(?:\/(\d+))?/);
+          if (idMatch) {
+            houseNumber = Number(idMatch[1]);
+            if (idMatch[2]) {
+              slashNumber = Number(idMatch[2]);
+            }
+          }
+        }
+
+        return {
+          sequence: seq,
+          houseNumber,
+          slashNumber,
+          floor
+        };
+      };
+
+      const aKey = parseRoomSortKey(a);
+      const bKey = parseRoomSortKey(b);
+
+      // 1. "ตามลำดับห้องที่" -> sequence
+      if (aKey.sequence !== bKey.sequence) {
+        return aKey.sequence - bKey.sequence;
+      }
+
+      // 2. "ตามด้วยลำดับ" -> houseNumber
+      if (aKey.houseNumber !== bKey.houseNumber) {
+        return aKey.houseNumber - bKey.houseNumber;
+      }
+
+      // 3. "ตามด้วยถ้ามีหมายเลขพวก /ด้านหลังให้เรียงตามลำดับให้ถูกต้อง" -> slashNumber
+      if (aKey.slashNumber !== bKey.slashNumber) {
+        return aKey.slashNumber - bKey.slashNumber;
+      }
+
+      // 4. "ตามด้วยชั้น" -> floor
+      if (aKey.floor !== bKey.floor) {
+        return aKey.floor - bKey.floor;
+      }
+
+      // 5. Fallback: string compare
+      return a.id.localeCompare(b.id, 'en', { numeric: true });
     });
-  }, [rooms, filteredRoomsBySearch, empSearchQuery, stats.occupantsByRoom]);
+  }, [rooms, filteredRoomsBySearch, empSearchQuery]);
 
   // Extra chart data calculations
   const chartData = useMemo(() => {
@@ -252,38 +323,58 @@ export default function AdminDashboard({
     setPricePerNight(room.pricePerNight || 0);
     setFloor(room.floor ? Number(room.floor) : 1);
     setNotes(room.notes || '');
+    setRoomName(room.roomName || '');
+    setRoomSequence(room.sequence !== undefined ? Number(room.sequence) : undefined);
+    setSaveRoomError(null);
   };
 
   const handleCreateRoom = async () => {
+    if (isCreatingRoom) return;
+    setCreateRoomError(null);
+
     const timestampStr = Date.now().toString().slice(-4);
     const roomNum = `RM-${timestampStr}`;
 
     if (rooms.some(r => r.id === roomNum)) {
-      alert('ระบบสร้างเลขห้องซ้ำ กรุณาลองใหม่');
+      setCreateRoomError('ระบบสร้างเลขห้องซ้ำ กรุณาลองใหม่');
       return;
     }
+
+    const maxSequence = rooms.reduce((max, r) => (r.sequence !== undefined && r.sequence > max ? r.sequence : max), 0);
+    const calculatedSeq = newRoomSequence !== undefined ? Number(newRoomSequence) : (maxSequence + 1);
 
     const newRoom: Room = {
       id: roomNum,
       roomType: newRoomType,
       capacity: newRoomCapacity,
       genderRestriction: newRoomGender as any,
+      roomName: newRoomName.trim() || '',
+      sequence: calculatedSeq,
+      floor: newRoomFloor.toString(),
       notes: 'สร้างห้องพักเพิ่มเติมโดยผู้ใช้งาน',
     };
 
     const updatedRooms = [...rooms, newRoom];
+    setIsCreatingRoom(true);
     try {
       await onUpdateRooms(updatedRooms);
-      alert(`สร้างห้อง ${roomNum} สำเร็จแล้ว!`);
+      setNewRoomName('');
+      setNewRoomSequence(undefined);
+      setNewRoomFloor(1);
       setIsAddingRoom(false);
     } catch (err: any) {
-      alert(`ไม่สามารถเซฟข้อมูลได้: ${err.message}`);
+      setCreateRoomError(err.message || 'ไม่สามารถเซฟข้อมูลได้');
+    } finally {
+      setIsCreatingRoom(false);
     }
   };
 
   const handleSaveRoomChanges = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingRoom) return;
+    if (!editingRoom || isSavingRoom) return;
+
+    setSaveRoomError(null);
+    setIsSavingRoom(true);
 
     const updatedRooms = rooms.map(r => {
       if (r.id === editingRoom.id) {
@@ -295,20 +386,20 @@ export default function AdminDashboard({
           pricePerNight: Number(pricePerNight),
           floor: floor?.toString() || '1',
           notes,
+          roomName: roomName.trim(),
+          sequence: roomSequence !== undefined ? Number(roomSequence) : undefined,
         };
       }
       return r;
     });
 
-    const confirmed = window.confirm('ยืนยันการบันทึกการแก้ไขข้อมูลห้องพักนี้ใช่หรือไม่?');
-    if (!confirmed) return;
-
     try {
       await onUpdateRooms(updatedRooms);
       setEditingRoom(null);
-      alert('บันทึกการแก้ไขเรียบร้อยแล้ว!');
     } catch (err: any) {
-      alert(`ไม่สามารถเซฟข้อมูลได้: ${err.message}`);
+      setSaveRoomError(err.message || 'ไม่สามารถเซฟข้อมูลได้');
+    } finally {
+      setIsSavingRoom(false);
     }
   };
 
@@ -351,6 +442,36 @@ export default function AdminDashboard({
       alert(`ล้างข้อมูลไม่สำเร็จ: ${err.message}`);
     } finally {
       setResetting(false);
+    }
+  };
+
+  const handleCleanSync = async () => {
+    if (!sheetConfig?.spreadsheetId || !onCleanSyncSheet) {
+      alert("ไม่พบสเปรดชีตที่เชื่อมต่ออยู่ หรือไม่มีฟังก์ชันเชื่อมต่อระบบ");
+      return;
+    }
+    setShowCleanSyncConfirm(false);
+    setIsPerformingCleanSync(true);
+    try {
+      await onCleanSyncSheet(sheetConfig.spreadsheetId);
+    } catch (err: any) {
+      alert(`ไม่สามารถล้างฐานข้อมูลและซิงค์ใหม่ได้: ${err.message}`);
+    } finally {
+      setIsPerformingCleanSync(false);
+    }
+  };
+
+  const handleWipeEmployees = async () => {
+    if (!onWipeAllEmployees) return;
+    setShowWipeEmployeesConfirm(false);
+    setIsPerformingWipe(true);
+    try {
+      await onWipeAllEmployees();
+      alert('ลบรายชื่อพนักงานและล้างข้อมูลการจองทั้งหมดเสร็จสมบูรณ์แล้ว!');
+    } catch (err: any) {
+      alert(`ลบข้อมูลไม่สำเร็จ: ${err.message}`);
+    } finally {
+      setIsPerformingWipe(false);
     }
   };
 
@@ -868,12 +989,23 @@ export default function AdminDashboard({
                               <Hotel className={`w-5 h-5 ${isFull ? 'text-rose-600' : 'text-indigo-600'}`} />
                             </div>
                             <div className="min-w-0">
-                              <h4 className="text-[13px] font-display font-extrabold text-slate-800 truncate leading-tight">
-                                {room.roomType}
+                              <h4 className="text-[13px] font-display font-extrabold text-slate-800 leading-tight">
+                                {room.roomName ? (
+                                  <span className="block text-indigo-700 font-black whitespace-pre-wrap">{room.roomName}</span>
+                                ) : (
+                                  <span className="block">ห้อง {room.id}</span>
+                                )}
                               </h4>
-                              <p className="text-[10px] font-bold text-slate-400 truncate mt-0.5">
-                                {room.notes || 'ห้องพักมาตรฐาน'}
-                              </p>
+                              <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                                <span className="text-[9px] font-bold bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
+                                  {room.roomType}
+                                </span>
+                                {room.floor && (
+                                  <span className="text-[9px] font-bold bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
+                                    ชั้น {room.floor}
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
                           <div className="flex flex-col items-end gap-1.5 shrink-0">
@@ -1275,7 +1407,7 @@ export default function AdminDashboard({
               </div>
 
               {/* Reset System Button */}
-              <div className="pt-6">
+              <div className="pt-6 space-y-3">
                 <button
                   onClick={() => setShowResetConfirm(true)}
                   className="w-full group p-4 bg-white hover:bg-rose-50 border border-slate-200 hover:border-rose-100 rounded-2xl transition-all text-left flex items-center justify-between"
@@ -1291,6 +1423,42 @@ export default function AdminDashboard({
                   </div>
                   <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-rose-400" />
                 </button>
+
+                {sheetConfig?.spreadsheetId && onCleanSyncSheet && (
+                  <button
+                    onClick={() => setShowCleanSyncConfirm(true)}
+                    className="w-full group p-4 bg-white hover:bg-rose-50 border border-slate-200 hover:border-rose-100 rounded-2xl transition-all text-left flex items-center justify-between"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-xl bg-slate-50 group-hover:bg-rose-100 text-slate-400 group-hover:text-rose-600 flex items-center justify-center transition-colors">
+                        <Trash2 className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h5 className="text-[11px] font-black text-slate-700 group-hover:text-rose-700 uppercase tracking-wider">ล้างข้อมูลพนักงาน & ซิงค์ใหม่ (Clean Re-sync)</h5>
+                        <p className="text-[9px] font-bold text-slate-400 mt-0.5">ลบรายชื่อพนักงานทั้งหมดในฐานข้อมูล แล้วดึงรายชื่อใหม่จาก Google Sheets อย่างสะอาด</p>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-rose-400" />
+                  </button>
+                )}
+
+                {onWipeAllEmployees && (
+                  <button
+                    onClick={() => setShowWipeEmployeesConfirm(true)}
+                    className="w-full group p-4 bg-white hover:bg-rose-50 border border-slate-200 hover:border-rose-100 rounded-2xl transition-all text-left flex items-center justify-between"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-xl bg-slate-50 group-hover:bg-rose-100 text-slate-400 group-hover:text-rose-600 flex items-center justify-center transition-colors">
+                        <UserX className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h5 className="text-[11px] font-black text-slate-700 group-hover:text-rose-700 uppercase tracking-wider">ลบข้อมูลรายชื่อพนักงานทั้งหมด</h5>
+                        <p className="text-[9px] font-bold text-slate-400 mt-0.5">ลบรายชื่อพนักงานและล้างการจองห้องพักทั้งหมดออกจากระบบทันที</p>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-rose-400" />
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -1433,6 +1601,13 @@ export default function AdminDashboard({
             </div>
 
             <form onSubmit={handleSaveRoomChanges} className="p-6 space-y-4">
+              {saveRoomError && (
+                <div className="p-3 bg-rose-50 border border-rose-100 text-rose-600 text-xs rounded-xl font-medium flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
+                  <span>{saveRoomError}</span>
+                </div>
+              )}
+
               <div>
                 <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5 tracking-wider font-display">
                   ประเภทห้องพัก
@@ -1445,7 +1620,8 @@ export default function AdminDashboard({
                     if (type === 'Family Suite') setCapacity(4);
                     else setCapacity(2);
                   }}
-                  className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50/50 focus:bg-white focus:ring-1 focus:ring-indigo-500 focus:outline-none font-medium"
+                  disabled={isSavingRoom}
+                  className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50/50 focus:bg-white focus:ring-1 focus:ring-indigo-500 focus:outline-none font-medium disabled:opacity-50"
                   required
                 >
                   <option value="Standard Twin">Standard Twin</option>
@@ -1467,7 +1643,8 @@ export default function AdminDashboard({
                     onChange={(e) => setCapacity(Number(e.target.value))}
                     min={1}
                     max={10}
-                    className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50/50 focus:bg-white focus:ring-1 focus:ring-indigo-500 focus:outline-none font-medium"
+                    disabled={isSavingRoom}
+                    className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50/50 focus:bg-white focus:ring-1 focus:ring-indigo-500 focus:outline-none font-medium disabled:opacity-50"
                     required
                   />
                 </div>
@@ -1479,13 +1656,59 @@ export default function AdminDashboard({
                   <select
                     value={genderRestriction}
                     onChange={(e) => setGenderRestriction(e.target.value as any)}
-                    className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50/50 focus:bg-white focus:ring-1 focus:ring-indigo-500 focus:outline-none font-medium"
+                    disabled={isSavingRoom}
+                    className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50/50 focus:bg-white focus:ring-1 focus:ring-indigo-500 focus:outline-none font-medium disabled:opacity-50"
                   >
                     <option value="ไม่จำกัด">ไม่จำกัดเพศ</option>
                     <option value="ชายล้วน">ชายล้วน</option>
                     <option value="หญิงล้วน">หญิงล้วน</option>
                   </select>
                 </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3.5">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5 tracking-wider font-display">
+                    ลำดับห้อง (เช่น 1, 2, 3...)
+                  </label>
+                  <input
+                    type="number"
+                    value={roomSequence !== undefined ? roomSequence : ''}
+                    onChange={(e) => setRoomSequence(e.target.value ? Number(e.target.value) : undefined)}
+                    min={1}
+                    disabled={isSavingRoom}
+                    className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50/50 focus:bg-white focus:ring-1 focus:ring-indigo-500 focus:outline-none font-medium disabled:opacity-50"
+                    placeholder="เรียงอัตโนมัติ"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5 tracking-wider font-display">
+                    ชั้นที่ (เช่น 1, 2, 3...)
+                  </label>
+                  <input
+                    type="number"
+                    value={floor}
+                    onChange={(e) => setFloor(e.target.value ? Number(e.target.value) : 1)}
+                    min={1}
+                    disabled={isSavingRoom}
+                    className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50/50 focus:bg-white focus:ring-1 focus:ring-indigo-500 focus:outline-none font-medium disabled:opacity-50"
+                    placeholder="ชั้น 1"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5 tracking-wider font-display">
+                  ชื่อห้องพัก / รายละเอียดสถานที่ (เช่น โซนรีสอร์ท บ้านริมธาร 881 เตียง 6 ฟุต 1 เตียง)
+                </label>
+                <textarea
+                  value={roomName}
+                  onChange={(e) => setRoomName(e.target.value)}
+                  disabled={isSavingRoom}
+                  className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-xs h-16 resize-none bg-slate-50/50 focus:bg-white focus:ring-1 focus:ring-indigo-500 focus:outline-none font-medium disabled:opacity-50"
+                  placeholder="เช่น โซนรีสอร์ท บ้านริมธาร 881 เตียง 6 ฟุต 1 เตียง"
+                />
               </div>
 
               <div>
@@ -1495,7 +1718,8 @@ export default function AdminDashboard({
                 <textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-xs h-18 resize-none bg-slate-50/50 focus:bg-white focus:ring-1 focus:ring-indigo-500 focus:outline-none font-medium"
+                  disabled={isSavingRoom}
+                  className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-xs h-18 resize-none bg-slate-50/50 focus:bg-white focus:ring-1 focus:ring-indigo-500 focus:outline-none font-medium disabled:opacity-50"
                   placeholder="เตียงคู่เดี่ยว วิวระเบียงสวน เป็นต้น..."
                 />
               </div>
@@ -1504,15 +1728,18 @@ export default function AdminDashboard({
                 <button
                   type="button"
                   onClick={() => setEditingRoom(null)}
-                  className="border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs font-bold py-2 px-4 rounded-xl transition-all"
+                  disabled={isSavingRoom}
+                  className="border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs font-bold py-2 px-4 rounded-xl transition-all disabled:opacity-50"
                 >
                   ยกเลิก
                 </button>
                 <button
                   type="submit"
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-2.5 px-4 rounded-xl transition-all shadow-sm"
+                  disabled={isSavingRoom}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-2.5 px-4 rounded-xl transition-all shadow-sm disabled:opacity-50 flex items-center gap-1.5"
                 >
-                  บันทึกการแก้ไข
+                  {isSavingRoom && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                  {isSavingRoom ? 'กำลังบันทึก...' : 'บันทึกการแก้ไข'}
                 </button>
               </div>
             </form>
@@ -1650,6 +1877,124 @@ export default function AdminDashboard({
         </div>
       )}
 
+      {/* Clean Re-sync Confirmation Modal */}
+      {showCleanSyncConfirm && (
+        <div 
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-[60] p-4 animate-in fade-in duration-200"
+          onClick={() => setShowCleanSyncConfirm(false)}
+        >
+          <div 
+            className="bg-white rounded-3xl border border-rose-100 shadow-2xl max-w-sm w-full p-6 space-y-6 overflow-hidden relative"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="absolute top-0 right-0 -mr-8 -mt-8 w-24 h-24 bg-rose-50 rounded-full blur-2xl opacity-60" />
+            
+            <div className="text-center space-y-3 relative">
+              <div className="w-16 h-16 bg-rose-100 rounded-full flex items-center justify-center mx-auto mb-2 text-rose-600 shadow-inner">
+                <Trash2 className="w-8 h-8" />
+              </div>
+              <h3 className="text-xl font-display font-extrabold text-slate-800 leading-tight">
+                ล้างข้อมูลพนักงาน & ซิงค์ใหม่?
+              </h3>
+              <p className="text-[13px] text-slate-500 leading-relaxed px-4">
+                คุณต้องการ <span className="font-bold text-rose-600">ลบรายชื่อพนักงานทั้งหมด</span> ในฐานข้อมูลระบบ และดึงรายชื่อใหม่จาก Google Sheets ใช่หรือไม่?
+                <br/>
+                <span className="text-[11px] font-medium text-slate-400 italic">*สถานะการจองและการตอบรับ RSVP เดิมของทุกคนจะถูกล้างใหม่ทั้งหมด</span>
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowCleanSyncConfirm(false)}
+                className="px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-2xl text-xs font-bold transition-all"
+              >
+                ไม่, ยกเลิก
+              </button>
+              <button
+                type="button"
+                onClick={handleCleanSync}
+                className="px-4 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl text-xs font-bold transition-all shadow-md shadow-rose-200 flex items-center justify-center gap-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                ยืนยันล้างและซิงค์ใหม่
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Loading Overlay for Clean Sync */}
+      {isPerformingCleanSync && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex flex-col items-center justify-center p-4 z-[110]">
+          <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-2xl flex flex-col items-center gap-4 text-center max-w-xs">
+            <RefreshCw className="w-10 h-10 animate-spin text-indigo-600" />
+            <div>
+              <h4 className="text-sm font-black text-slate-800">กำลังล้างและซิงค์ข้อมูลใหม่...</h4>
+              <p className="text-[11px] text-slate-400 mt-1">กรุณารอสักครู่ ระบบกำลังลบฐานข้อมูลพนักงานเดิม และเชื่อมต่อดึงข้อมูลล่าสุดจาก Google Sheets</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal for Wiping All Employees */}
+      {showWipeEmployeesConfirm && (
+        <div 
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-[60] p-4 animate-in fade-in duration-200"
+          onClick={() => setShowWipeEmployeesConfirm(false)}
+        >
+          <div 
+            className="bg-white rounded-3xl border border-rose-100 shadow-2xl max-w-sm w-full p-6 space-y-6 overflow-hidden relative"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="absolute top-0 right-0 -mr-8 -mt-8 w-24 h-24 bg-rose-50 rounded-full blur-2xl opacity-60" />
+            
+            <div className="text-center space-y-3 relative">
+              <div className="w-16 h-16 bg-rose-100 rounded-full flex items-center justify-center mx-auto mb-2 text-rose-600 shadow-inner">
+                <UserX className="w-8 h-8" />
+              </div>
+              <h3 className="text-xl font-display font-extrabold text-slate-800 leading-tight">
+                ลบรายชื่อพนักงานทั้งหมด?
+              </h3>
+              <p className="text-[13px] text-slate-500 leading-relaxed px-4">
+                คุณต้องการ <span className="font-bold text-rose-600">ลบรายชื่อพนักงานทั้งหมดออกจากระบบ</span> รวมถึงล้างสถานะการจองห้องพักของทุกคนเลยใช่หรือไม่? การกระทำนี้จะไม่สามารถเรียกคืนได้
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowWipeEmployeesConfirm(false)}
+                className="px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-2xl text-xs font-bold transition-all"
+              >
+                ไม่, ยกเลิก
+              </button>
+              <button
+                type="button"
+                onClick={handleWipeEmployees}
+                className="px-4 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl text-xs font-bold transition-all shadow-md shadow-rose-200 flex items-center justify-center gap-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                ยืนยันลบทั้งหมด
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Loading Overlay for Wipe */}
+      {isPerformingWipe && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex flex-col items-center justify-center p-4 z-[110]">
+          <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-2xl flex flex-col items-center gap-4 text-center max-w-xs">
+            <RefreshCw className="w-10 h-10 animate-spin text-indigo-600" />
+            <div>
+              <h4 className="text-sm font-black text-slate-800">กำลังลบข้อมูลรายชื่อพนักงาน...</h4>
+              <p className="text-[11px] text-slate-400 mt-1">กรุณารอสักครู่ ระบบกำลังล้างข้อมูลพนักงานและการจองห้องทั้งหมดออกจากฐานข้อมูล</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Add Room Modal */}
       {isAddingRoom && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
@@ -1661,13 +2006,67 @@ export default function AdminDashboard({
               </h3>
               <button
                 onClick={() => setIsAddingRoom(false)}
-                className="text-slate-400 hover:text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-full p-1.5 transition-all"
+                disabled={isCreatingRoom}
+                className="text-slate-400 hover:text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-full p-1.5 transition-all disabled:opacity-50"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
+
+            {createRoomError && (
+              <div className="p-3 bg-rose-50 border border-rose-100 text-rose-600 text-xs rounded-xl font-medium flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
+                <span>{createRoomError}</span>
+              </div>
+            )}
             
             <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                    ลำดับห้อง (เช่น 1, 2, 3...)
+                  </label>
+                  <input
+                    type="number"
+                    value={newRoomSequence !== undefined ? newRoomSequence : ''}
+                    onChange={(e) => setNewRoomSequence(e.target.value ? Number(e.target.value) : undefined)}
+                    min={1}
+                    disabled={isCreatingRoom}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
+                    placeholder="เรียงอัตโนมัติ"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                    ชั้นที่ (เช่น 1, 2, 3...)
+                  </label>
+                  <input
+                    type="number"
+                    value={newRoomFloor}
+                    onChange={(e) => setNewRoomFloor(e.target.value ? Number(e.target.value) : 1)}
+                    min={1}
+                    disabled={isCreatingRoom}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
+                    placeholder="ชั้น 1"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  ชื่อห้องพัก / รายละเอียดสถานที่
+                </label>
+                <textarea
+                  value={newRoomName}
+                  onChange={(e) => setNewRoomName(e.target.value)}
+                  disabled={isCreatingRoom}
+                  rows={2}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 resize-none"
+                  placeholder="เช่น โซนรีสอร์ท บ้านริมธาร 881 เตียง 6 ฟุต 1 เตียง"
+                />
+              </div>
+
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
                   ประเภทห้องพัก
@@ -1680,7 +2079,8 @@ export default function AdminDashboard({
                     if (type === 'Family Suite') setNewRoomCapacity(4);
                     else setNewRoomCapacity(2);
                   }}
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  disabled={isCreatingRoom}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
                 >
                   <option value="Standard Twin">Standard Twin</option>
                   <option value="Deluxe King">Deluxe King</option>
@@ -1699,7 +2099,8 @@ export default function AdminDashboard({
                     <button
                       key={cap}
                       onClick={() => setNewRoomCapacity(cap)}
-                      className={`py-2 rounded-xl text-xs font-bold transition-all border ${
+                      disabled={isCreatingRoom}
+                      className={`py-2 rounded-xl text-xs font-bold transition-all border disabled:opacity-50 ${
                         newRoomCapacity === cap
                           ? 'bg-indigo-600 text-white border-indigo-600 shadow-md transform scale-105'
                           : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:bg-indigo-50'
@@ -1716,7 +2117,8 @@ export default function AdminDashboard({
                     min="1"
                     value={newRoomCapacity}
                     onChange={(e) => setNewRoomCapacity(parseInt(e.target.value, 10) || 1)}
-                    className="w-20 border border-slate-200 rounded-lg px-2 py-1 text-xs bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    disabled={isCreatingRoom}
+                    className="w-20 border border-slate-200 rounded-lg px-2 py-1 text-xs bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
                   />
                 </div>
               </div>
@@ -1728,7 +2130,8 @@ export default function AdminDashboard({
                 <select
                   value={newRoomGender}
                   onChange={(e) => setNewRoomGender(e.target.value)}
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  disabled={isCreatingRoom}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
                 >
                   <option value="ไม่จำกัด">ไม่จำกัดเพศ</option>
                   <option value="ชายล้วน">ชายล้วน</option>
@@ -1740,16 +2143,18 @@ export default function AdminDashboard({
             <div className="pt-2 border-t border-slate-100 flex justify-end gap-2">
               <button
                 onClick={() => setIsAddingRoom(false)}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                disabled={isCreatingRoom}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold transition-colors cursor-pointer disabled:opacity-50"
               >
                 ยกเลิก
               </button>
               <button
                 onClick={handleCreateRoom}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer flex items-center gap-2"
+                disabled={isCreatingRoom}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer flex items-center gap-2 disabled:opacity-50"
               >
-                <Building2 className="w-4 h-4" />
-                ยืนยันการสร้างห้อง
+                {isCreatingRoom ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Building2 className="w-4 h-4" />}
+                {isCreatingRoom ? 'กำลังสร้าง...' : 'ยืนยันการสร้างห้อง'}
               </button>
             </div>
           </div>

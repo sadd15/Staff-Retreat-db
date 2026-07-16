@@ -17,9 +17,21 @@ interface RoomDirectoryProps {
   employees: Employee[];
   rooms: Room[];
   onCancelBooking: (empId: string) => Promise<void>;
+  userRole: 'visitor' | 'employee' | 'admin' | null;
+  selectedEmployeeId: string | null;
+  selectedDepartment: string | null;
+  isReadOnlyEmployee?: boolean;
 }
 
-export default function RoomDirectory({ employees, rooms, onCancelBooking }: RoomDirectoryProps) {
+export default function RoomDirectory({ 
+  employees, 
+  rooms, 
+  onCancelBooking,
+  userRole,
+  selectedEmployeeId,
+  selectedDepartment,
+  isReadOnlyEmployee = false,
+}: RoomDirectoryProps) {
   const [empSearchQuery, setEmpSearchQuery] = useState('');
   const [cancelingEmp, setCancelingEmp] = useState<Employee | null>(null);
   const [isCanceling, setIsCanceling] = useState(false);
@@ -59,16 +71,69 @@ export default function RoomDirectory({ employees, rooms, onCancelBooking }: Roo
   const sortedRooms = useMemo(() => {
     const list = empSearchQuery ? filteredRoomsBySearch : rooms;
     return [...list].sort((a, b) => {
-      const aOccs = stats.occupantsByRoom[a.id] || [];
-      const bOccs = stats.occupantsByRoom[b.id] || [];
-      const aFull = aOccs.length >= a.capacity;
-      const bFull = bOccs.length >= b.capacity;
-      
-      if (aFull && !bFull) return 1;
-      if (!aFull && bFull) return -1;
-      return 0;
+      // Parse function to extract houseNumber, sequence, slashNumber, floor
+      const parseRoomSortKey = (room: Room) => {
+        const name = room.roomName || '';
+        const id = room.id || '';
+        const seq = room.sequence !== undefined ? Number(room.sequence) : 9999;
+        const floor = room.floor !== undefined ? Number(room.floor) : 1;
+
+        let houseNumber = 9999;
+        let slashNumber = 0;
+
+        // Look for numbers like "881/1" or "881" in the roomName first
+        const patternMatch = name.match(/(\d+)(?:\/(\d+))?/);
+        if (patternMatch) {
+          houseNumber = Number(patternMatch[1]);
+          if (patternMatch[2]) {
+            slashNumber = Number(patternMatch[2]);
+          }
+        } else {
+          // Fallback to id
+          const idMatch = id.match(/(\d+)(?:\/(\d+))?/);
+          if (idMatch) {
+            houseNumber = Number(idMatch[1]);
+            if (idMatch[2]) {
+              slashNumber = Number(idMatch[2]);
+            }
+          }
+        }
+
+        return {
+          sequence: seq,
+          houseNumber,
+          slashNumber,
+          floor
+        };
+      };
+
+      const aKey = parseRoomSortKey(a);
+      const bKey = parseRoomSortKey(b);
+
+      // 1. "ตามลำดับห้องที่" -> sequence
+      if (aKey.sequence !== bKey.sequence) {
+        return aKey.sequence - bKey.sequence;
+      }
+
+      // 2. "ตามด้วยลำดับ" -> houseNumber
+      if (aKey.houseNumber !== bKey.houseNumber) {
+        return aKey.houseNumber - bKey.houseNumber;
+      }
+
+      // 3. "ตามด้วยถ้ามีหมายเลขพวก /ด้านหลังให้เรียงตามลำดับให้ถูกต้อง" -> slashNumber
+      if (aKey.slashNumber !== bKey.slashNumber) {
+        return aKey.slashNumber - bKey.slashNumber;
+      }
+
+      // 4. "ตามด้วยชั้น" -> floor
+      if (aKey.floor !== bKey.floor) {
+        return aKey.floor - bKey.floor;
+      }
+
+      // 5. Fallback: string compare
+      return a.id.localeCompare(b.id, 'en', { numeric: true });
     });
-  }, [rooms, filteredRoomsBySearch, empSearchQuery, stats.occupantsByRoom]);
+  }, [rooms, filteredRoomsBySearch, empSearchQuery]);
 
   const filterExport = (node: HTMLElement | any) => {
     if (node?.classList?.contains('hide-in-export')) return false;
@@ -91,12 +156,13 @@ export default function RoomDirectory({ employees, rooms, onCancelBooking }: Roo
   };
 
   const handleExportRoomsCsv = () => {
-    const rows = [['ห้องพัก', 'ประเภท', 'เพศ', 'ความจุ', 'ผู้เข้าพัก', 'รายชื่อ']];
+    const rows = [['ห้องพัก', 'ชื่อห้องพัก/สถานที่', 'ประเภท', 'เพศ', 'ความจุ', 'ผู้เข้าพัก', 'รายชื่อ']];
     sortedRooms.forEach((room, index) => {
       const occupants = stats.occupantsByRoom[room.id] || [];
       const names = occupants.map(o => `${o.name} (${o.department})`).join('; ');
       rows.push([
         `ห้องที่ ${index + 1}`,
+        room.roomName || '-',
         room.roomType,
         room.genderRestriction,
         room.capacity.toString(),
@@ -212,9 +278,12 @@ export default function RoomDirectory({ employees, rooms, onCancelBooking }: Roo
                 return (
                   <tr key={room.id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-4 py-2.5 align-top border-r border-slate-100">
-                      <div className="flex flex-col">
-                        <span className="font-bold text-slate-800 text-sm">ห้องที่ {index + 1}</span>
-                        <span className="text-[10px] font-medium text-slate-400">{room.roomType}</span>
+                      <div className="flex flex-col min-w-0">
+                        <span className="font-bold text-slate-800 text-xs">ห้องที่ {room.sequence !== undefined ? room.sequence : index + 1}</span>
+                        {room.roomName && (
+                          <span className="font-medium text-indigo-700 text-xs whitespace-pre-wrap leading-tight mt-1 mb-1">{room.roomName}</span>
+                        )}
+                        <span className="text-[9px] font-bold text-slate-400 bg-slate-50 border border-slate-100 px-1.5 py-0.5 rounded w-fit mt-0.5">{room.roomType}</span>
                       </div>
                     </td>
                     <td className="px-4 py-2.5 align-top border-r border-slate-100">
@@ -246,13 +315,15 @@ export default function RoomDirectory({ employees, rooms, onCancelBooking }: Roo
                               }`} />
                               <span className="font-bold text-slate-700 text-[12px]">{o.name}</span>
                               <span className="text-[10px] text-slate-400">({o.department})</span>
-                              <button
-                                onClick={() => setCancelingEmp(o)}
-                                className="hide-in-export text-slate-200 hover:text-rose-500 transition-all p-0.5"
-                                title="ยกเลิกการจอง"
-                              >
-                                <X className="w-3 h-3" />
-                              </button>
+                              {!isReadOnlyEmployee && (userRole === 'admin' || (userRole === 'employee' && selectedEmployeeId === o.id)) && (
+                                <button
+                                  onClick={() => setCancelingEmp(o)}
+                                  className="hide-in-export text-slate-300 hover:text-rose-500 transition-all p-0.5"
+                                  title="ยกเลิกการจอง"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              )}
                             </div>
                           ))}
                         </div>
@@ -291,12 +362,15 @@ export default function RoomDirectory({ employees, rooms, onCancelBooking }: Roo
 
               return (
                 <div key={room.id} className="p-4 space-y-3">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <h4 className="font-bold text-slate-800 text-sm">ห้องที่ {index + 1}</h4>
-                      <p className="text-[10px] font-bold text-slate-400 mt-0.5">{room.roomType}</p>
+                  <div className="flex justify-between items-start gap-4">
+                    <div className="min-w-0">
+                      <h4 className="font-bold text-slate-800 text-xs">ห้องที่ {room.sequence !== undefined ? room.sequence : index + 1}</h4>
+                      {room.roomName && (
+                        <h5 className="font-medium text-indigo-700 text-xs whitespace-pre-wrap leading-tight mt-1">{room.roomName}</h5>
+                      )}
+                      <p className="text-[9px] font-bold text-slate-400 bg-slate-50 border border-slate-100 px-1.5 py-0.5 rounded w-fit mt-1.5">{room.roomType}</p>
                     </div>
-                    <span className={`px-2 py-0.5 rounded text-[9px] font-bold border ${
+                    <span className={`px-2 py-0.5 rounded text-[9px] font-bold border shrink-0 ${
                       room.genderRestriction === 'ชายล้วน' ? 'bg-blue-50 text-blue-600 border-blue-100' :
                       room.genderRestriction === 'หญิงล้วน' ? 'bg-rose-50 text-rose-600 border-rose-100' :
                       'bg-slate-50 text-slate-500 border-slate-200'
@@ -312,9 +386,11 @@ export default function RoomDirectory({ employees, rooms, onCancelBooking }: Roo
                           <div className={`w-1.5 h-1.5 rounded-full ${o.gender === 'หญิง' ? 'bg-rose-400' : 'bg-blue-400'}`} />
                           <p className="text-[11px] font-bold text-slate-700">{o.name} <span className="text-[9px] text-slate-400">({o.department})</span></p>
                         </div>
-                        <button onClick={() => setCancelingEmp(o)} className="p-1 text-slate-300">
-                          <X className="w-3.5 h-3.5" />
-                        </button>
+                        {!isReadOnlyEmployee && (userRole === 'admin' || (userRole === 'employee' && selectedEmployeeId === o.id)) && (
+                          <button onClick={() => setCancelingEmp(o)} className="p-1 text-slate-300 hover:text-rose-500 transition-colors">
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
                     ))}
                     {isEmpty && <p className="text-[10px] text-slate-300 italic py-1">ยังไม่มีการจอง</p>}

@@ -20,14 +20,17 @@ import {
   updateCheckInStatus,
   seedDemoDataToFirestore,
   syncSheetToFirestore,
+  cleanSyncSheetToFirestore,
   syncFirestoreToSheet,
   resetAllBookingsInFirestore,
+  wipeAllEmployeesInFirestore,
   clearSheetConfig,
   getAdminPin,
-  updateAdminPin
+  updateAdminPin,
+  updateEmployeeVerification
 } from './lib/firebaseService';
 import { sendAdminPinEmail } from './lib/emailService';
-import { Loader2, AlertCircle, FileSpreadsheet, Sparkles, ChevronRight, Shield, Eye, EyeOff, KeyRound, Lock, Heart, Mail } from 'lucide-react';
+import { Loader2, AlertCircle, FileSpreadsheet, Sparkles, ChevronRight, Shield, Eye, EyeOff, KeyRound, Lock, Heart, Mail, Users, Search, Building2, Check, CheckCircle2, Home, ArrowRight, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function App() {
@@ -58,6 +61,158 @@ export default function App() {
   const [newPinInput, setNewPinInput] = useState('');
   const [showOldPin, setShowOldPin] = useState(false);
   const [showNewPin, setShowNewPin] = useState(false);
+
+  // User Role State
+  const [userRole, setUserRole] = useState<'visitor' | 'employee' | 'admin' | null>(() => {
+    return (localStorage.getItem('companytrip_user_role') as any) || null;
+  });
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(() => {
+    return localStorage.getItem('companytrip_selected_employee_id') || null;
+  });
+  const [selectedDepartment, setSelectedDepartment] = useState<string | null>(() => {
+    return localStorage.getItem('companytrip_selected_department') || null;
+  });
+
+  const [verifiedEmployeeId, setVerifiedEmployeeId] = useState<string | null>(() => {
+    return localStorage.getItem('companytrip_verified_employee_id') || null;
+  });
+
+  const isReadOnlyEmployee = React.useMemo(() => {
+    if (userRole !== 'employee') return false;
+    if (!verifiedEmployeeId) return false;
+    return selectedEmployeeId !== verifiedEmployeeId;
+  }, [userRole, selectedEmployeeId, verifiedEmployeeId]);
+
+  const selectedEmployeeName = React.useMemo(() => {
+    if (!selectedEmployeeId) return null;
+    return employees.find(e => e.id === selectedEmployeeId)?.name || null;
+  }, [selectedEmployeeId, employees]);
+
+  // Temporary landing page states
+  const [selectedDeptInput, setSelectedDeptInput] = useState('');
+  const [selectedEmpIdInput, setSelectedEmpIdInput] = useState('');
+  const [showEmployeeVerifyModal, setShowEmployeeVerifyModal] = useState(false);
+  const [adminPinInput, setAdminPinInput] = useState('');
+  const [showAdminPin, setShowAdminPin] = useState(false);
+  const [landingError, setLandingError] = useState<string | null>(null);
+  const [landingSearchQuery, setLandingSearchQuery] = useState('');
+  const [landingDeptFilter, setLandingDeptFilter] = useState('all');
+  const [landingRsvpFilter, setLandingRsvpFilter] = useState('all');
+  const [isLandingDirectoryModalOpen, setIsLandingDirectoryModalOpen] = useState(false);
+
+  // Departments list sourced dynamically from employees list
+  const departments = React.useMemo(() => {
+    const depts = new Set(employees.map(e => e.department).filter(Boolean));
+    return Array.from(depts).sort();
+  }, [employees]);
+
+  // Filtered employees for landing dropdown based on selected department
+  const filteredEmployeesForLanding = React.useMemo(() => {
+    if (!selectedDeptInput) return [];
+    return employees.filter(e => e.department === selectedDeptInput).sort((a, b) => a.name.localeCompare(b.name, 'th'));
+  }, [employees, selectedDeptInput]);
+
+  // Filtered employees list for the landing page interactive directory
+  const filteredEmployeesForDirectory = React.useMemo(() => {
+    return employees.filter(emp => {
+      // search filter
+      const matchesSearch = !landingSearchQuery.trim() || 
+        emp.name.toLowerCase().includes(landingSearchQuery.toLowerCase()) || 
+        emp.department.toLowerCase().includes(landingSearchQuery.toLowerCase()) ||
+        emp.id.toLowerCase().includes(landingSearchQuery.toLowerCase());
+      
+      // department filter
+      const matchesDept = landingDeptFilter === 'all' || emp.department === landingDeptFilter;
+      
+      // rsvp filter
+      const status = emp.rsvpStatus || 'ยังไม่ระบุ';
+      const matchesRsvp = landingRsvpFilter === 'all' || status === landingRsvpFilter;
+      
+      return matchesSearch && matchesDept && matchesRsvp;
+    }).sort((a, b) => a.name.localeCompare(b.name, 'th'));
+  }, [employees, landingSearchQuery, landingDeptFilter, landingRsvpFilter]);
+
+  const handleLoginAsVisitor = () => {
+    setUserRole('visitor');
+    localStorage.setItem('companytrip_user_role', 'visitor');
+    setActiveTab('rsvp');
+    setLandingError(null);
+  };
+
+  const handleLoginAsEmployeeDirectly = (empId: string, dept: string) => {
+    setUserRole('employee');
+    setSelectedEmployeeId(empId);
+    setSelectedDepartment(dept);
+    localStorage.setItem('companytrip_user_role', 'employee');
+    localStorage.setItem('companytrip_selected_employee_id', empId);
+    localStorage.setItem('companytrip_selected_department', dept);
+    setActiveTab('rsvp');
+    setLandingError(null);
+  };
+
+  const handleLoginAsEmployee = () => {
+    if (!selectedDeptInput || !selectedEmpIdInput) {
+      setLandingError('กรุณาเลือกฝ่ายและชื่อของคุณ');
+      return;
+    }
+    
+    // If this device is not verified as any employee yet, prompt verification
+    if (!verifiedEmployeeId) {
+      setShowEmployeeVerifyModal(true);
+    } else {
+      handleLoginAsEmployeeDirectly(selectedEmpIdInput, selectedDeptInput);
+    }
+  };
+
+  const handleConfirmVerificationAndLogin = async () => {
+    if (!selectedEmpIdInput || !selectedDeptInput) return;
+    setSyncing(true);
+    try {
+      await updateEmployeeVerification(selectedEmpIdInput, true);
+      setVerifiedEmployeeId(selectedEmpIdInput);
+      localStorage.setItem('companytrip_verified_employee_id', selectedEmpIdInput);
+      handleLoginAsEmployeeDirectly(selectedEmpIdInput, selectedDeptInput);
+      setShowEmployeeVerifyModal(false);
+    } catch (err: any) {
+      console.error(err);
+      setLandingError(`ไม่สามารถบันทึกการยืนยันตัวตนได้: ${err.message}`);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const handleLoginAsAdmin = async () => {
+    try {
+      const actualPin = await getAdminPin();
+      if (adminPinInput === actualPin) {
+        setUserRole('admin');
+        setIsAdminAuthenticated(true);
+        localStorage.setItem('companytrip_user_role', 'admin');
+        setActiveTab('rsvp');
+        setLandingError(null);
+        setAdminPinInput('');
+      } else {
+        setLandingError('รหัสผ่านไม่ถูกต้อง');
+      }
+    } catch (err) {
+      setLandingError('เกิดข้อผิดพลาดในการตรวจสอบรหัสผ่าน');
+    }
+  };
+
+  const handleSwitchRole = () => {
+    setUserRole(null);
+    setSelectedEmployeeId(null);
+    setSelectedDepartment(null);
+    setIsAdminAuthenticated(false);
+    localStorage.removeItem('companytrip_user_role');
+    localStorage.removeItem('companytrip_selected_employee_id');
+    localStorage.removeItem('companytrip_selected_department');
+    setSelectedDeptInput('');
+    setSelectedEmpIdInput('');
+    setAdminPinInput('');
+    setActiveTab('rsvp');
+    setLandingError(null);
+  };
 
   // Set up real-time listener subscriptions on mount
   useEffect(() => {
@@ -229,10 +384,10 @@ export default function App() {
       }
 
       await updateBookingInFirestore(allIds, roomId);
-      // Auto-sync back to sheet if connected
-      if (sheetConfig?.spreadsheetId) {
+      // Auto-sync back to sheet if connected and googleToken is available
+      if (sheetConfig?.spreadsheetId && googleToken) {
         const updatedEmployees = employees.map(e => allIds.includes(e.id) ? { ...e, roomId, rsvpStatus: 'ไป' as const } : e);
-        syncFirestoreToSheet(sheetConfig.spreadsheetId, updatedEmployees, rooms).catch(e => console.error("Auto-sync failed", e));
+        syncFirestoreToSheet(sheetConfig.spreadsheetId, updatedEmployees, rooms, googleToken).catch(e => console.error("Auto-sync failed", e));
       }
     } catch (err: any) {
       console.error(err);
@@ -249,10 +404,10 @@ export default function App() {
       const emp = employees.find(e => e.id === employeeId);
       const oldRoomId = emp?.roomId || undefined;
       await cancelBookingInFirestore(employeeId, oldRoomId);
-      // Auto-sync back to sheet if connected
-      if (sheetConfig?.spreadsheetId) {
+      // Auto-sync back to sheet if connected and googleToken is available
+      if (sheetConfig?.spreadsheetId && googleToken) {
         const updatedEmployees = employees.map(e => e.id === employeeId ? { ...e, roomId: '' } : e);
-        syncFirestoreToSheet(sheetConfig.spreadsheetId, updatedEmployees, rooms).catch(e => console.error("Auto-sync failed", e));
+        syncFirestoreToSheet(sheetConfig.spreadsheetId, updatedEmployees, rooms, googleToken).catch(e => console.error("Auto-sync failed", e));
       }
     } catch (err: any) {
       console.error(err);
@@ -267,9 +422,9 @@ export default function App() {
     setSyncing(true);
     try {
       await updateRoomsInFirestore(updatedRooms);
-      // Auto-sync back to sheet if connected
-      if (sheetConfig?.spreadsheetId) {
-        syncFirestoreToSheet(sheetConfig.spreadsheetId, employees, updatedRooms).catch(e => console.error("Auto-sync failed", e));
+      // Auto-sync back to sheet if connected and googleToken is available
+      if (sheetConfig?.spreadsheetId && googleToken) {
+        syncFirestoreToSheet(sheetConfig.spreadsheetId, employees, updatedRooms, googleToken).catch(e => console.error("Auto-sync failed", e));
       }
     } catch (err: any) {
       console.error(err);
@@ -284,9 +439,9 @@ export default function App() {
     setSyncing(true);
     try {
       await updateEmployeesInFirestore(updatedEmployees);
-      // Auto-sync back to sheet if connected
-      if (sheetConfig?.spreadsheetId) {
-        syncFirestoreToSheet(sheetConfig.spreadsheetId, updatedEmployees, rooms).catch(e => console.error("Auto-sync failed", e));
+      // Auto-sync back to sheet if connected and googleToken is available
+      if (sheetConfig?.spreadsheetId && googleToken) {
+        syncFirestoreToSheet(sheetConfig.spreadsheetId, updatedEmployees, rooms, googleToken).catch(e => console.error("Auto-sync failed", e));
       }
     } catch (err: any) {
       console.error(err);
@@ -304,6 +459,18 @@ export default function App() {
     } catch (err: any) {
       console.error(err);
       throw new Error(`ไม่สามารถล้างการจองทั้งหมดได้: ${err.message}`);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const handleWipeAllEmployees = async () => {
+    setSyncing(true);
+    try {
+      await wipeAllEmployeesInFirestore();
+    } catch (err: any) {
+      console.error(err);
+      throw new Error(`ไม่สามารถลบรายชื่อพนักงานทั้งหมดได้: ${err.message}`);
     } finally {
       setSyncing(false);
     }
@@ -352,6 +519,29 @@ export default function App() {
     } catch (err: any) {
       console.error(err);
       alert(`ดึงข้อมูลล้มเหลว: ${err.message || 'โปรดตรวจสอบสิทธิ์การแชร์ (ต้องตั้งเป็น ทุกคนที่มีลิงก์อ่านได้) และชื่อแท็บ Employees, Rooms'}`);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  // Clean Reset & Re-sync from Google Sheet (drops all current employees and imports clean)
+  const handleCleanImportFromGoogleSheet = async (sheetLinkOrId: string) => {
+    if (!sheetLinkOrId.trim()) return;
+    setSyncing(true);
+    setDataError(null);
+    try {
+      let sheetId = sheetLinkOrId.trim();
+      const match = sheetId.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+      if (match) {
+        sheetId = match[1];
+      }
+
+      await cleanSyncSheetToFirestore(sheetId);
+      setSheetInput('');
+      alert('ล้างฐานข้อมูลพนักงานเดิมและซิงค์รายชื่อพนักงานใหม่จาก Google Sheet เรียบร้อยแล้ว!');
+    } catch (err: any) {
+      console.error(err);
+      alert(`ดึงข้อมูลล้มเหลว: ${err.message || 'โปรดตรวจสอบสิทธิ์การแชร์ (ต้องตั้งเป็น ทุกคนที่มีลิงก์อ่านได้) และชื่อแท็บ Employees'}`);
     } finally {
       setSyncing(false);
     }
@@ -412,6 +602,11 @@ export default function App() {
         activeTab={activeTab}
         setActiveTab={handleSetTab}
         isOfflineMode={false}
+        userRole={userRole}
+        selectedEmployeeName={selectedEmployeeName}
+        selectedDepartment={selectedDepartment}
+        onSwitchRole={handleSwitchRole}
+        isReadOnlyEmployee={isReadOnlyEmployee}
       />
 
       <main className="flex-1">
@@ -477,6 +672,465 @@ export default function App() {
               </div>
             </div>
           </div>
+        ) : !userRole ? (
+          /* Mode Selection screen */
+          <div className="max-w-6xl mx-auto px-4 py-8 sm:py-16 flex-1 flex flex-col items-center justify-center gap-12 min-h-[85vh] relative" id="mode-selection-container">
+            {/* Ambient Background Glowing Accents */}
+            <div className="absolute top-10 left-10 w-72 h-72 bg-indigo-200/20 rounded-full blur-3xl pointer-events-none"></div>
+            <div className="absolute bottom-10 right-10 w-80 h-80 bg-amber-200/20 rounded-full blur-3xl pointer-events-none"></div>
+
+            {/* Main Mode Selection Console */}
+            <div className="bg-white/90 backdrop-blur-md rounded-[2.5rem] border-2 border-slate-100/80 shadow-[0_30px_70px_rgba(15,23,42,0.06)] w-full max-w-4xl p-6 sm:p-12 space-y-10 relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50 rounded-full blur-3xl opacity-60 -mr-10 -mt-10"></div>
+              
+              <div className="text-center space-y-3 relative z-10">
+                <motion.span 
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-gradient-to-r from-indigo-50 to-indigo-100/50 text-indigo-700 text-[10px] font-black border border-indigo-200/40 uppercase tracking-widest font-display shadow-xs"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-amber-500 animate-spin-slow" />
+                  Staff Retreat Room Allocation System
+                </motion.span>
+                <motion.h2 
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1 }}
+                  className="text-3xl sm:text-4xl font-display font-black text-slate-800 leading-tight tracking-tight"
+                >
+                  เลือกโหมดการเข้าใช้งานระบบ
+                </motion.h2>
+                <motion.p 
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.2 }}
+                  className="text-slate-400 text-xs max-w-md mx-auto"
+                >
+                  ยินดีต้อนรับสู่ระบบจองห้องพักสัมมนาพนักงานและบริหารจัดการอัจฉริยะ โปรดเลือกบทบาทเพื่อดำเนินการต่อครับ
+                </motion.p>
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 0.25 }}
+                  className="pt-2 flex justify-center"
+                >
+                  <button
+                    onClick={() => setIsLandingDirectoryModalOpen(true)}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-indigo-50 hover:bg-indigo-100/80 text-indigo-700 hover:text-indigo-800 text-xs font-black border border-indigo-200/50 hover:border-indigo-300/60 transition-all hover:scale-105 shadow-3xs cursor-pointer active:scale-95 group"
+                  >
+                    <Search className="w-4 h-4 text-indigo-500 group-hover:scale-110 transition-transform" />
+                    <span>ตรวจสอบรายชื่อพนักงานและสถานะการจองทั้งหมด 🔍</span>
+                  </button>
+                </motion.div>
+              </div>
+
+              {landingError && (
+                <div className="bg-rose-50 border border-rose-100 rounded-2xl p-4 text-rose-700 text-xs flex items-center gap-2.5 shadow-3xs animate-bounce">
+                  <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
+                  <span className="font-bold">{landingError}</span>
+                </div>
+              )}
+
+              {/* Grid of 3 modes with high-fidelity styled cards */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10">
+                
+                {/* 1. Visitor Card */}
+                <motion.button
+                  whileHover={{ y: -6, scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2 }}
+                  type="button"
+                  onClick={handleLoginAsVisitor}
+                  className="flex flex-col items-center justify-between p-6 rounded-3xl border border-slate-200/80 hover:border-indigo-200 bg-slate-50/50 hover:bg-white text-center cursor-pointer transition-all hover:shadow-[0_15px_30px_rgba(99,102,241,0.05)] group h-full min-h-[280px]"
+                >
+                  <div className="space-y-4 flex flex-col items-center w-full">
+                    <div className="w-14 h-14 rounded-2xl bg-slate-100 text-slate-500 flex items-center justify-center border border-slate-200/60 group-hover:bg-indigo-50 group-hover:text-indigo-600 group-hover:scale-105 transition-all duration-350 shadow-3xs">
+                      <Eye className="w-6 h-6" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <h3 className="text-sm font-bold text-slate-800 font-display font-black tracking-tight">ผู้เยี่ยมชม (Visitor Mode)</h3>
+                      <p className="text-[11px] text-slate-400 leading-relaxed px-2">
+                        เข้าชมความคืบหน้า รายงานผลสรุป ตารางห้อง และผังเตียงของเพื่อนร่วมงานแบบเรียลไทม์ (อ่านอย่างเดียว)
+                      </p>
+                    </div>
+                  </div>
+                  <span className="inline-flex items-center gap-1.5 text-[10px] font-black text-indigo-600 bg-indigo-50 border border-indigo-100/50 px-3.5 py-1.5 rounded-xl mt-6 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                    เข้าสู่ระบบ <ArrowRight className="w-3.5 h-3.5" />
+                  </span>
+                </motion.button>
+
+                {/* 2. Employee Card */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.3 }}
+                  className={`flex flex-col items-center justify-between p-6 rounded-3xl border transition-all h-full min-h-[280px] shadow-3xs ${
+                    selectedDeptInput 
+                      ? 'border-indigo-400 bg-gradient-to-b from-indigo-50/20 to-indigo-100/5 hover:border-indigo-500 shadow-[0_15px_30px_rgba(99,102,241,0.06)]' 
+                      : 'border-slate-200 bg-slate-50/50 hover:border-indigo-100 hover:bg-white'
+                  } text-center`}
+                >
+                  <div className="space-y-4 flex flex-col items-center w-full">
+                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center border transition-all duration-350 shadow-3xs ${
+                      selectedDeptInput ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-slate-100 text-slate-500 border-slate-200/60'
+                    }`}>
+                      <Users className="w-6 h-6" />
+                    </div>
+                    
+                    <div className="space-y-2 w-full">
+                      <div className="space-y-1">
+                        <h3 className="text-sm font-bold text-slate-800 font-display font-black tracking-tight">พนักงาน (Employee)</h3>
+                        <p className="text-[11px] text-slate-400 leading-relaxed px-1">
+                          กรุณาเลือกฝ่ายและชื่อของคุณเพื่อตอบรับเข้าร่วมงาน และไปลุยเลือกจองห้องพักของคุณ
+                        </p>
+                      </div>
+
+                      {/* Department Select */}
+                      <select
+                        value={selectedDeptInput}
+                        onChange={(e) => {
+                          setSelectedDeptInput(e.target.value);
+                          setSelectedEmpIdInput('');
+                        }}
+                        className="w-full bg-white border border-slate-250 hover:border-indigo-300 rounded-xl text-xs py-2 px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-bold text-slate-700 transition-all cursor-pointer"
+                      >
+                        <option value="">-- เลือกฝ่าย/แผนก --</option>
+                        {departments.map(d => (
+                          <option key={d} value={d}>{d}</option>
+                        ))}
+                      </select>
+
+                      {/* Employee Select */}
+                      {selectedDeptInput && (
+                        <select
+                          value={selectedEmpIdInput}
+                          onChange={(e) => setSelectedEmpIdInput(e.target.value)}
+                          className="w-full bg-white border border-slate-250 hover:border-indigo-300 rounded-xl text-xs py-2 px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-bold text-slate-700 mt-2 animate-in fade-in slide-in-from-top-1 duration-300 transition-all cursor-pointer"
+                        >
+                          <option value="">-- เลือกรายชื่อของคุณ --</option>
+                          {filteredEmployeesForLanding.map(e => (
+                            <option key={e.id} value={e.id}>{e.name} ({e.gender})</option>
+                          ))}
+                        </select>
+                      )}
+
+                      {/* Welcome message helper */}
+                      {selectedDeptInput && selectedEmpIdInput && (
+                        <div className="bg-emerald-50 border border-emerald-100 text-emerald-800 text-[10px] p-2 rounded-xl text-center font-bold mt-1.5 animate-pulse">
+                          ยินดีต้อนรับคุณ {employees.find(e => e.id === selectedEmpIdInput)?.name} ครับ!
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleLoginAsEmployee}
+                    disabled={!selectedDeptInput || !selectedEmpIdInput}
+                    className={`w-full inline-flex items-center justify-center gap-1.5 text-xs font-black mt-6 px-4 py-2 rounded-xl transition-all cursor-pointer ${
+                      selectedDeptInput && selectedEmpIdInput
+                        ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-100 active:scale-95'
+                        : 'bg-slate-100 text-slate-400 opacity-60 cursor-not-allowed'
+                    }`}
+                  >
+                    <span>ยืนยันพนักงาน</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </motion.div>
+
+                {/* 3. Admin Card */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.4 }}
+                  className={`flex flex-col items-center justify-between p-6 rounded-3xl border transition-all h-full min-h-[280px] shadow-3xs ${
+                    adminPinInput 
+                      ? 'border-amber-400 bg-gradient-to-b from-amber-50/20 to-amber-100/5 hover:border-amber-500 shadow-[0_15px_30px_rgba(217,119,6,0.06)]' 
+                      : 'border-slate-200 bg-slate-50/50 hover:border-amber-100 hover:bg-white'
+                  } text-center`}
+                >
+                  <div className="space-y-4 flex flex-col items-center w-full">
+                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center border transition-all duration-350 shadow-3xs ${
+                      adminPinInput ? 'bg-amber-600 text-white border-amber-600' : 'bg-slate-100 text-slate-500 border-slate-200/60'
+                    }`}>
+                      <Shield className="w-6 h-6" />
+                    </div>
+                    
+                    <div className="space-y-2 w-full">
+                      <div className="space-y-1">
+                        <h3 className="text-sm font-bold text-slate-800 font-display font-black tracking-tight">ผู้ดูแลระบบ (Admin)</h3>
+                        <p className="text-[11px] text-slate-400 leading-relaxed px-1">
+                          กรอกรหัสผ่านผู้ดูแลระบบ เพื่อปลดล็อคเครื่องมือในการแก้ไข นำเข้า และล้างสถานะทั้งหมด
+                        </p>
+                      </div>
+
+                      {/* Password PIN Field */}
+                      <div className="relative pt-1">
+                        <Lock className={`absolute left-3 top-3.5 w-4 h-4 transition-colors ${adminPinInput ? 'text-amber-600' : 'text-slate-450'}`} />
+                        <input
+                          type={showAdminPin ? "text" : "password"}
+                          placeholder="รหัสผ่านผู้ดูแลระบบ"
+                          value={adminPinInput}
+                          onChange={(e) => setAdminPinInput(e.target.value)}
+                          className="w-full pl-9 pr-9 py-2 bg-white border border-slate-250 rounded-xl text-center text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 font-mono font-extrabold tracking-widest text-slate-800 transition-all"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowAdminPin(!showAdminPin)}
+                          className="absolute right-3 top-3.5 text-slate-450 hover:text-slate-700"
+                        >
+                          {showAdminPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleLoginAsAdmin}
+                    disabled={!adminPinInput.trim()}
+                    className={`w-full inline-flex items-center justify-center gap-1.5 text-xs font-black mt-6 px-4 py-2 rounded-xl transition-all cursor-pointer ${
+                      adminPinInput.trim()
+                        ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-md shadow-amber-100 active:scale-95'
+                        : 'bg-slate-100 text-slate-400 opacity-60 cursor-not-allowed'
+                    }`}
+                  >
+                    <span>ยืนยันผู้ดูแลระบบ</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </motion.div>
+              </div>
+            </div>
+
+            {isLandingDirectoryModalOpen && (
+              <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-200">
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95, y: 15 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: 15 }}
+                  className="bg-white rounded-2xl border border-slate-150 shadow-[0_25px_60px_-15px_rgba(15,23,42,0.18)] w-full max-w-4xl overflow-hidden flex flex-col max-h-[88vh] relative"
+                >
+                  {/* Directory Header (Compact) */}
+                  <div className="px-4 py-3.5 sm:px-5 bg-slate-50 border-b border-slate-150 flex items-center justify-between gap-4 shrink-0">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center shadow-sm shrink-0">
+                        <Users className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm sm:text-base font-display font-black text-slate-800">รายชื่อและสถานะของพนักงานทั้งหมด</h3>
+                        <p className="text-slate-400 text-[10px] sm:text-xs">
+                          พนักงานทั้งหมด {employees.length} คน • คลิกที่แถวเพื่อเข้าจองห้องพักทันที
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsLandingDirectoryModalOpen(false)}
+                      className="p-1.5 rounded-lg hover:bg-slate-150 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {/* Directory Body (Compact space-y-3) */}
+                  <div className="p-4 sm:p-5 bg-white space-y-3.5 flex-1 overflow-y-auto flex flex-col">
+                    {/* Toolbar: Search & RSVP Filter (Merged Row) */}
+                    <div className="flex flex-col md:flex-row md:items-center gap-2.5">
+                      {/* Search Input */}
+                      <div className="relative flex-1">
+                        <Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-slate-400" />
+                        <input
+                          type="text"
+                          placeholder="ค้นหาชื่อ นามสกุล หรือฝ่าย..."
+                          value={landingSearchQuery}
+                          onChange={(e) => setLandingSearchQuery(e.target.value)}
+                          className="w-full pl-8.5 pr-4 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-1.5 focus:ring-indigo-500 focus:border-indigo-500 font-medium"
+                        />
+                      </div>
+
+                      {/* RSVP Quick Filters */}
+                      <div className="flex items-center gap-1.5 shrink-0 bg-slate-50 p-1 rounded-lg border border-slate-200/60 self-start md:self-auto">
+                        <span className="font-extrabold text-slate-400 text-[9px] px-1.5 uppercase tracking-wider">RSVP:</span>
+                        <div className="flex gap-0.5">
+                          {['all', 'ไป', 'ไม่ไป', 'ยังไม่ระบุ'].map((status) => {
+                            const label = status === 'all' ? 'ทั้งหมด' : status === 'ไป' ? 'ไปร่วม' : status === 'ไม่ไป' ? 'ไม่ไป' : 'ยังไม่ระบุ';
+                            const isActive = landingRsvpFilter === status;
+                            return (
+                              <button
+                                key={status}
+                                onClick={() => setLandingRsvpFilter(status)}
+                                className={`px-2 py-0.5 rounded font-black text-[10px] transition-all cursor-pointer ${
+                                  isActive
+                                    ? status === 'ไป'
+                                      ? 'bg-emerald-600 text-white shadow-3xs'
+                                      : status === 'ไม่ไป'
+                                        ? 'bg-rose-600 text-white shadow-3xs'
+                                        : status === 'ยังไม่ระบุ'
+                                          ? 'bg-amber-600 text-white shadow-3xs'
+                                          : 'bg-slate-800 text-white shadow-3xs'
+                                    : 'bg-transparent text-slate-650 hover:bg-slate-200'
+                                }`}
+                              >
+                                {label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Department Filters (Compact Row) */}
+                    <div className="flex flex-wrap items-center gap-2 text-xs py-1.5 border-t border-b border-slate-100">
+                      <span className="font-extrabold text-slate-400 text-[9px] uppercase tracking-wider">กรองตามฝ่าย:</span>
+                      <div className="flex flex-wrap gap-1">
+                        <button
+                          onClick={() => setLandingDeptFilter('all')}
+                          className={`px-2 py-0.5 rounded-md font-bold text-[10px] transition-all cursor-pointer ${
+                            landingDeptFilter === 'all'
+                              ? 'bg-indigo-600 text-white shadow-3xs'
+                              : 'bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200/50'
+                          }`}
+                        >
+                          ทั้งหมด
+                        </button>
+                        {departments.map(d => (
+                          <button
+                            key={d}
+                            onClick={() => setLandingDeptFilter(d)}
+                            className={`px-2 py-0.5 rounded-md font-bold text-[10px] transition-all cursor-pointer ${
+                              landingDeptFilter === d
+                                ? 'bg-indigo-600 text-white shadow-3xs'
+                                : 'bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200/50'
+                            }`}
+                          >
+                            {d}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Table Area (Compact with small margins) */}
+                    <div className="flex-1 overflow-x-auto min-h-0">
+                      {filteredEmployeesForDirectory.length === 0 ? (
+                        <div className="py-12 text-center text-slate-450 text-xs italic">
+                          ไม่พบข้อมูลพนักงานที่ตรงกับเงื่อนไขการค้นหา
+                        </div>
+                      ) : (
+                        <div className="border border-slate-200 rounded-xl overflow-hidden max-h-[380px] overflow-y-auto shadow-4xs">
+                          <table className="w-full text-left border-collapse">
+                            <thead className="sticky top-0 bg-slate-50 z-10 border-b border-slate-200">
+                              <tr className="text-[10px] text-slate-500 font-extrabold font-display uppercase tracking-wider">
+                                <th className="px-3.5 py-2 text-center w-12">ลำดับ</th>
+                                <th className="px-3.5 py-2">ชื่อ - นามสกุลพนักงาน</th>
+                                <th className="px-3.5 py-2">ฝ่าย / แผนก</th>
+                                <th className="px-3.5 py-2 text-center w-16">เพศ</th>
+                                <th className="px-3.5 py-2 text-center">สถานะ RSVP</th>
+                                <th className="px-3.5 py-2 text-center">ห้องพัก</th>
+                                <th className="px-3.5 py-2 text-right">ดำเนินการ</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 bg-white">
+                              {filteredEmployeesForDirectory.map((emp, index) => {
+                                const rsvp = emp.rsvpStatus || 'ยังไม่ระบุ';
+                                const isBooked = !!emp.roomId;
+
+                                return (
+                                  <tr
+                                    key={emp.id}
+                                    onClick={() => {
+                                      setSelectedDeptInput(emp.department);
+                                      setSelectedEmpIdInput(emp.id);
+                                      setLandingError(null);
+                                      setIsLandingDirectoryModalOpen(false);
+                                      document.getElementById('mode-selection-container')?.scrollIntoView({ behavior: 'smooth' });
+                                    }}
+                                    className="text-[11px] hover:bg-indigo-50/40 transition-colors cursor-pointer group"
+                                  >
+                                    {/* Index */}
+                                    <td className="px-3.5 py-1.5 text-center text-slate-400 font-bold font-mono">
+                                      {index + 1}
+                                    </td>
+
+                                    {/* Name & ID */}
+                                    <td className="px-3.5 py-1.5">
+                                      <div className="font-extrabold text-slate-800 text-xs group-hover:text-indigo-600 transition-colors flex items-center gap-1.5">
+                                        <span>{emp.name}</span>
+                                        <span className="text-[9px] font-mono font-medium text-slate-400 bg-slate-50 border border-slate-100 px-1 rounded">
+                                          {emp.id}
+                                        </span>
+                                      </div>
+                                    </td>
+
+                                    {/* Department */}
+                                    <td className="px-3.5 py-1.5">
+                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-50 text-slate-650 border border-slate-200/40">
+                                        <Building2 className="w-2.5 h-2.5 text-slate-400" />
+                                        {emp.department}
+                                      </span>
+                                    </td>
+
+                                    {/* Gender */}
+                                    <td className="px-3.5 py-1.5 text-center">
+                                      <span className={`inline-block px-1.5 py-0.2 rounded font-extrabold text-[9px] ${
+                                        emp.gender === 'หญิง'
+                                          ? 'bg-rose-50 text-rose-600 border border-rose-100/30'
+                                          : 'bg-blue-50 text-blue-600 border border-blue-100/30'
+                                      }`}>
+                                        {emp.gender}
+                                      </span>
+                                    </td>
+
+                                    {/* RSVP */}
+                                    <td className="px-3.5 py-1.5 text-center">
+                                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black ${
+                                        rsvp === 'ไป'
+                                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/20'
+                                          : rsvp === 'ไม่ไป'
+                                            ? 'bg-rose-50 text-rose-700 border border-rose-200/20'
+                                            : 'bg-amber-50 text-amber-700 border border-amber-200/20'
+                                      }`}>
+                                        <span className={`w-1 h-1 rounded-full ${
+                                          rsvp === 'ไป' ? 'bg-emerald-500' : rsvp === 'ไม่ไป' ? 'bg-rose-500' : 'bg-amber-500'
+                                        }`} />
+                                        {rsvp === 'ไป' ? 'ไปร่วมทริป' : rsvp === 'ไม่ไป' ? 'สละสิทธิ์' : 'ยังไม่ระบุ'}
+                                      </span>
+                                    </td>
+
+                                    {/* Room status */}
+                                    <td className="px-3.5 py-1.5 text-center">
+                                      {isBooked ? (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-indigo-50 text-indigo-700 border border-indigo-100/40">
+                                          <Home className="w-2.5 h-2.5 text-indigo-500" />
+                                          ห้อง {emp.roomId}
+                                        </span>
+                                      ) : (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-50 text-slate-400">
+                                          ว่าง
+                                        </span>
+                                      )}
+                                    </td>
+
+                                    {/* Quick Selection Link */}
+                                    <td className="px-3.5 py-1.5 text-right">
+                                      <span className="inline-flex items-center gap-0.5 text-[10px] font-black text-indigo-600 hover:text-indigo-800 bg-indigo-50 group-hover:bg-indigo-100/80 px-2 py-0.5 rounded-md transition-all">
+                                        จอง <ChevronRight className="w-2.5 h-2.5" />
+                                      </span>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </motion.div>
+              </div>
+            )}
+          </div>
         ) : (
           /* Main Application Dashboard */
           <div className="py-4" id="main-app-views">
@@ -505,6 +1159,10 @@ export default function App() {
                     onUpdateRSVP={handleUpdateRSVP}
                     syncing={syncing}
                     onUpdateEmployees={handleUpdateEmployees}
+                    userRole={userRole}
+                    selectedEmployeeId={selectedEmployeeId}
+                    selectedDepartment={selectedDepartment}
+                    isReadOnlyEmployee={isReadOnlyEmployee}
                   />
                 ) : activeTab === 'booking' ? (
                   <EmployeeBooking
@@ -514,12 +1172,20 @@ export default function App() {
                     onCancelBooking={handleCancelBooking}
                     syncing={syncing}
                     onUpdateRooms={handleUpdateRooms}
+                    userRole={userRole}
+                    selectedEmployeeId={selectedEmployeeId}
+                    selectedDepartment={selectedDepartment}
+                    isReadOnlyEmployee={isReadOnlyEmployee}
                   />
                 ) : activeTab === 'directory' ? (
                   <RoomDirectory
                     employees={employees}
                     rooms={rooms}
                     onCancelBooking={handleCancelBooking}
+                    userRole={userRole}
+                    selectedEmployeeId={selectedEmployeeId}
+                    selectedDepartment={selectedDepartment}
+                    isReadOnlyEmployee={isReadOnlyEmployee}
                   />
                 ) : activeTab === 'summary' ? (
                   <SummaryReport 
@@ -538,12 +1204,14 @@ export default function App() {
                     onResetAllBookings={handleResetAllBookings}
                     onCancelBooking={handleCancelBooking}
                     onSyncSheet={handleImportFromGoogleSheet}
+                    onCleanSyncSheet={handleCleanImportFromGoogleSheet}
                     onSyncToSheet={handleSyncToSheet}
                     onClearSheetConfig={handleClearSheetConfig}
                     onChangePin={() => setIsChangingPin(true)}
                     rsvpClosed={rsvpClosed}
                     onToggleRSVPClosed={handleToggleRSVPClosed}
                     isOfflineMode={false}
+                    onWipeAllEmployees={handleWipeAllEmployees}
                   />
                 )}
               </motion.div>
@@ -698,6 +1366,90 @@ export default function App() {
                   className="py-4 bg-amber-600 hover:bg-amber-700 text-white rounded-2xl font-black text-xs transition-all shadow-xl shadow-amber-100 active:scale-95"
                 >
                   บันทึกรหัสใหม่
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
+      {/* Employee Verification Confirmation Modal */}
+      {showEmployeeVerifyModal && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md flex items-center justify-center p-4 z-[110] animate-in fade-in duration-300">
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0, y: 20 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            className="bg-white rounded-[2rem] border-4 border-indigo-50 shadow-[0_25px_60px_-15px_rgba(79,70,229,0.2)] max-w-md w-full p-8 text-center relative overflow-hidden"
+          >
+            {/* Decorative background gradients */}
+            <div className="absolute -top-10 -right-10 w-32 h-32 bg-indigo-50 rounded-full opacity-50 blur-2xl"></div>
+            <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-indigo-100 rounded-full opacity-50 blur-2xl"></div>
+
+            <div className="relative z-10 space-y-6">
+              {/* Shield/Verification icon */}
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center mx-auto shadow-md shadow-indigo-100">
+                <Shield className="w-8 h-8 text-white animate-pulse" />
+              </div>
+
+              {/* Title & Warning description */}
+              <div className="space-y-2">
+                <h3 className="text-xl font-black text-slate-800 font-display tracking-tight">
+                  ยืนยันข้อมูลและตัวตนพนักงาน 🔐
+                </h3>
+                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">
+                  Employee Identity Verification
+                </p>
+              </div>
+
+              {/* Chosen Employee Card Details */}
+              {(() => {
+                const emp = employees.find(e => e.id === selectedEmpIdInput);
+                if (!emp) return null;
+                return (
+                  <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 text-left space-y-2">
+                    <div className="flex justify-between items-center pb-2 border-b border-slate-200/50">
+                      <span className="text-[10px] text-slate-400 font-extrabold uppercase">ชื่อพนักงาน</span>
+                      <span className="text-[10px] font-mono bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded font-bold">ID: {emp.id}</span>
+                    </div>
+                    <div className="font-extrabold text-slate-800 text-sm">{emp.name}</div>
+                    <div className="grid grid-cols-2 gap-2 pt-1 text-[11px] text-slate-500 font-bold">
+                      <div>ฝ่าย/แผนก: <span className="text-slate-700">{emp.department}</span></div>
+                      <div>เพศ: <span className="text-slate-700">{emp.gender}</span></div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              <div className="text-xs text-slate-500 text-left space-y-2 leading-relaxed">
+                <p>
+                  📍 <b>หลังจากกดยืนยันแล้ว:</b> อุปกรณ์นี้จะจดจำว่าคุณคือพนักงานคนนี้ในการเข้าใช้งาน และระบบจะทำการแสตมป์ยืนยันการเข้าใช้ระบบทันที
+                </p>
+                <p className="text-rose-600 font-bold">
+                  ⚠️ สำคัญ: คุณจะไม่สามารถแก้ไขข้อมูลหรือสลับห้องให้เพื่อนพนักงานคนอื่นในภายหลังได้ (สามารถเปิดดูได้ในโหมดอ่านอย่างเดียวเท่านั้น)
+                </p>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="grid grid-cols-2 gap-4 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowEmployeeVerifyModal(false)}
+                  disabled={syncing}
+                  className="py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-2xl font-black text-xs transition-all active:scale-95 disabled:opacity-50"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmVerificationAndLogin}
+                  disabled={syncing}
+                  className="py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black text-xs transition-all shadow-xl shadow-indigo-100 active:scale-95 disabled:opacity-50 flex items-center justify-center gap-1.5"
+                >
+                  {syncing ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-white" />
+                  ) : (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-300 fill-emerald-500/20" />
+                  )}
+                  {syncing ? 'กำลังบันทึก...' : 'ยืนยันตัวตน'}
                 </button>
               </div>
             </div>

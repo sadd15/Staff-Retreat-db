@@ -96,7 +96,7 @@ export default function SummaryReport({ employees, rooms }: SummaryReportProps) 
 
   const handleExportRoomsCsv = () => {
     const rows = [
-      ['กลุ่มห้องพัก', 'ประเภทห้อง', 'จำนวนผู้เข้าพัก (คน)', 'รายชื่อผู้เข้าพัก']
+      ['กลุ่มห้องพัก', 'ชื่อห้องพัก/สถานที่', 'ประเภทห้อง', 'จำนวนผู้เข้าพัก (คน)', 'รายชื่อผู้เข้าพัก']
     ];
 
     rooms.forEach(room => {
@@ -104,6 +104,7 @@ export default function SummaryReport({ employees, rooms }: SummaryReportProps) 
       const occupantsStr = occupants.map(o => `${o.name} (${o.department})`).join(', ');
       rows.push([
         room.id,
+        room.roomName || '-',
         room.roomType,
         `${occupants.length}/${room.capacity}`,
         occupantsStr
@@ -315,12 +316,77 @@ export default function SummaryReport({ employees, rooms }: SummaryReportProps) 
                       </td>
                     </tr>
                   ) : (
-                    rooms.map((room, index) => {
+                    [...rooms].sort((a, b) => {
+                      const parseRoomSortKey = (room: Room) => {
+                        const name = room.roomName || '';
+                        const id = room.id || '';
+                        const seq = room.sequence !== undefined ? Number(room.sequence) : 9999;
+                        const floor = room.floor !== undefined ? Number(room.floor) : 1;
+
+                        let houseNumber = 9999;
+                        let slashNumber = 0;
+
+                        // Look for numbers like "881/1" or "881" in the roomName first
+                        const patternMatch = name.match(/(\d+)(?:\/(\d+))?/);
+                        if (patternMatch) {
+                          houseNumber = Number(patternMatch[1]);
+                          if (patternMatch[2]) {
+                            slashNumber = Number(patternMatch[2]);
+                          }
+                        } else {
+                          // Fallback to id
+                          const idMatch = id.match(/(\d+)(?:\/(\d+))?/);
+                          if (idMatch) {
+                            houseNumber = Number(idMatch[1]);
+                            if (idMatch[2]) {
+                              slashNumber = Number(idMatch[2]);
+                            }
+                          }
+                        }
+
+                        return {
+                          sequence: seq,
+                          houseNumber,
+                          slashNumber,
+                          floor
+                        };
+                      };
+
+                      const aKey = parseRoomSortKey(a);
+                      const bKey = parseRoomSortKey(b);
+
+                      // 1. "ตามลำดับห้องที่" -> sequence
+                      if (aKey.sequence !== bKey.sequence) {
+                        return aKey.sequence - bKey.sequence;
+                      }
+
+                      // 2. "ตามด้วยลำดับ" -> houseNumber
+                      if (aKey.houseNumber !== bKey.houseNumber) {
+                        return aKey.houseNumber - bKey.houseNumber;
+                      }
+
+                      // 3. "ตามด้วยถ้ามีหมายเลขพวก /ด้านหลังให้เรียงตามลำดับให้ถูกต้อง" -> slashNumber
+                      if (aKey.slashNumber !== bKey.slashNumber) {
+                        return aKey.slashNumber - bKey.slashNumber;
+                      }
+
+                      // 4. "ตามด้วยชั้น" -> floor
+                      if (aKey.floor !== bKey.floor) {
+                        return aKey.floor - bKey.floor;
+                      }
+
+                      // 5. Fallback: string compare
+                      return a.id.localeCompare(b.id, 'en', { numeric: true });
+                    }).map((room, index) => {
                       const occupants = stats.occupantsByRoom[room.id] || [];
+                      const displaySeq = room.sequence !== undefined ? room.sequence : (index + 1);
                       return (
                         <tr key={room.id} className="hover:bg-slate-50 border-b border-slate-200 last:border-b-0">
-                          <td className="px-4 py-3 border-r border-slate-200 font-bold whitespace-nowrap bg-slate-50/30">
-                            ห้องที่ {index + 1}
+                          <td className="px-4 py-3 border-r border-slate-200 bg-slate-50/30">
+                            <div className="font-bold text-slate-800 mb-1">ห้องที่ {displaySeq}</div>
+                            {room.roomName && (
+                              <div className="font-medium text-indigo-700 text-xs whitespace-pre-wrap leading-relaxed max-w-[200px] mb-1">{room.roomName}</div>
+                            )}
                             <div className="text-[10px] text-slate-400 font-normal mt-1">{room.roomType}</div>
                             <div className="text-[10px] text-indigo-500 font-normal mt-0.5">{room.genderRestriction}</div>
                           </td>

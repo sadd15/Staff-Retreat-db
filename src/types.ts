@@ -6,16 +6,19 @@ export interface Employee {
   roomId: string; // empty string if not booked
   rsvpStatus?: 'ไป' | 'ไม่ไป' | 'ยังไม่ระบุ';
   checkedIn?: boolean;
+  verified?: boolean;
 }
 
 export interface Room {
   id: string; // Used as unique ID
+  roomName?: string; // Customizable room name (e.g., "บ้านริมธาร 881")
   roomType: string;
   capacity: number;
   genderRestriction: 'ชายล้วน' | 'หญิงล้วน' | 'ไม่จำกัด';
   pricePerNight?: number;
   floor?: string;
   notes?: string;
+  sequence?: number; // Custom room sequence/order number (e.g. 1, 2, 3)
   employees?: string[];
 }
 

@@ -34,6 +34,10 @@ interface EmployeeBookingProps {
   onCancelBooking: (employeeId: string) => Promise<void>;
   syncing: boolean;
   onUpdateRooms?: (updatedRooms: Room[]) => Promise<void>;
+  userRole: 'visitor' | 'employee' | 'admin' | null;
+  selectedEmployeeId: string | null;
+  selectedDepartment: string | null;
+  isReadOnlyEmployee?: boolean;
 }
 
 export default function EmployeeBooking({
@@ -43,6 +47,10 @@ export default function EmployeeBooking({
   onCancelBooking,
   syncing,
   onUpdateRooms,
+  userRole,
+  selectedEmployeeId,
+  selectedDepartment,
+  isReadOnlyEmployee = false,
 }: EmployeeBookingProps) {
   // Stepper / Wizard state: 1 = Select Employee, 2 = Select Room, 3 = Select Roommates & Confirm
   const [activeStep, setActiveStep] = useState<1 | 2 | 3>(1);
@@ -52,6 +60,13 @@ export default function EmployeeBooking({
   const [selectedRoomNumber, setSelectedRoomNumber] = useState<string>('');
   const [selectedRoommateIds, setSelectedRoommateIds] = useState<string[]>([]);
   const [mixedGenderConsent, setMixedGenderConsent] = useState(false);
+
+  // Auto-initialize selectedMainEmpId for employees
+  React.useEffect(() => {
+    if (userRole === 'employee' && selectedEmployeeId) {
+      setSelectedMainEmpId(selectedEmployeeId);
+    }
+  }, [userRole, selectedEmployeeId]);
   const [isCheckingRealtime, setIsCheckingRealtime] = useState(false);
   const [realtimeCheckStep, setRealtimeCheckStep] = useState<number>(0);
   const [viewingOccupantsRoomId, setViewingOccupantsRoomId] = useState<string | null>(null);
@@ -69,6 +84,9 @@ export default function EmployeeBooking({
   const [newRoomType, setNewRoomType] = useState('Standard Twin');
   const [newRoomCapacity, setNewRoomCapacity] = useState(2);
   const [newRoomGender, setNewRoomGender] = useState('ไม่จำกัด');
+  const [newRoomName, setNewRoomName] = useState('');
+  const [newRoomSequence, setNewRoomSequence] = useState<number | undefined>(undefined);
+  const [newRoomFloor, setNewRoomFloor] = useState(1);
 
   // Step 2 lists sub-filters (important for 120+ employees)
   const [bookingMainEmpDeptFilter, setBookingMainEmpDeptFilter] = useState<string>('all');
@@ -154,14 +172,19 @@ export default function EmployeeBooking({
   const filteredMainEmployees = useMemo(() => {
     let result = unbookedEmployees;
 
-    // Apply department filter
-    if (bookingMainEmpDeptFilter !== 'all') {
-      result = result.filter(e => e.department === bookingMainEmpDeptFilter);
-    }
+    // If logged in as employee, restrict main booker choice to oneself
+    if (userRole === 'employee' && selectedEmployeeId) {
+      result = result.filter(e => e.id === selectedEmployeeId);
+    } else {
+      // Apply department filter
+      if (bookingMainEmpDeptFilter !== 'all') {
+        result = result.filter(e => e.department === bookingMainEmpDeptFilter);
+      }
 
-    // Apply gender filter
-    if (bookingMainEmpGenderFilter !== 'all') {
-      result = result.filter(e => e.gender === bookingMainEmpGenderFilter);
+      // Apply gender filter
+      if (bookingMainEmpGenderFilter !== 'all') {
+        result = result.filter(e => e.gender === bookingMainEmpGenderFilter);
+      }
     }
 
     if (!bookingSearchQuery) return result;
@@ -171,7 +194,7 @@ export default function EmployeeBooking({
       e.id.toLowerCase().includes(q) ||
       e.department.toLowerCase().includes(q)
     );
-  }, [unbookedEmployees, bookingSearchQuery, bookingMainEmpDeptFilter, bookingMainEmpGenderFilter]);
+  }, [unbookedEmployees, bookingSearchQuery, bookingMainEmpDeptFilter, bookingMainEmpGenderFilter, userRole, selectedEmployeeId]);
 
   // Filtered list of booked employees for lookup/manage
   const filteredBookedEmployees = useMemo(() => {
@@ -222,24 +245,66 @@ export default function EmployeeBooking({
       return true;
     });
 
-    // Sort: Available rooms first, Full rooms last
+    // Sort strictly by Room Sorting Criteria first, so they are displayed in correct sequential order (Sequence -> House Number -> Slash Number -> Floor)
     return [...result].sort((a, b) => {
-      const aOccCount = roomOccupantsMap[a.id]?.length || 0;
-      const bOccCount = roomOccupantsMap[b.id]?.length || 0;
-      const aIsFull = aOccCount >= Number(a.capacity);
-      const bIsFull = bOccCount >= Number(b.capacity);
+      const parseRoomSortKey = (room: Room) => {
+        const name = room.roomName || '';
+        const id = room.id || '';
+        const seq = room.sequence !== undefined ? Number(room.sequence) : 9999;
+        const floor = room.floor !== undefined ? Number(room.floor) : 1;
 
-      // If one is full and the other is not, the available one comes first
-      if (aIsFull !== bIsFull) {
-        return aIsFull ? 1 : -1;
+        let houseNumber = 9999;
+        let slashNumber = 0;
+
+        // Look for numbers like "881/1" or "881" in the roomName first
+        const patternMatch = name.match(/(\d+)(?:\/(\d+))?/);
+        if (patternMatch) {
+          houseNumber = Number(patternMatch[1]);
+          if (patternMatch[2]) {
+            slashNumber = Number(patternMatch[2]);
+          }
+        } else {
+          // Fallback to id
+          const idMatch = id.match(/(\d+)(?:\/(\d+))?/);
+          if (idMatch) {
+            houseNumber = Number(idMatch[1]);
+            if (idMatch[2]) {
+              slashNumber = Number(idMatch[2]);
+            }
+          }
+        }
+
+        return {
+          sequence: seq,
+          houseNumber,
+          slashNumber,
+          floor
+        };
+      };
+
+      const aKey = parseRoomSortKey(a);
+      const bKey = parseRoomSortKey(b);
+
+      // 1. "ตามลำดับห้องที่" -> sequence
+      if (aKey.sequence !== bKey.sequence) {
+        return aKey.sequence - bKey.sequence;
       }
 
-      // Secondary sort: number of empty beds (descending) - more empty beds first
-      const aEmptyBeds = Number(a.capacity) - aOccCount;
-      const bEmptyBeds = Number(b.capacity) - bOccCount;
-      if (aEmptyBeds !== bEmptyBeds) return bEmptyBeds - aEmptyBeds;
+      // 2. "ตามด้วยลำดับ" -> houseNumber
+      if (aKey.houseNumber !== bKey.houseNumber) {
+        return aKey.houseNumber - bKey.houseNumber;
+      }
 
-      // Tertiary sort: Room ID/Index
+      // 3. "ตามด้วยถ้ามีหมายเลขพวก /ด้านหลังให้เรียงตามลำดับให้ถูกต้อง" -> slashNumber
+      if (aKey.slashNumber !== bKey.slashNumber) {
+        return aKey.slashNumber - bKey.slashNumber;
+      }
+
+      // 4. "ตามด้วยชั้น" -> floor
+      if (aKey.floor !== bKey.floor) {
+        return aKey.floor - bKey.floor;
+      }
+
       return a.id.localeCompare(b.id, 'en', { numeric: true });
     });
   }, [rooms, roomFilterType, roomFilterGender, roomOccupantsMap]);
@@ -433,17 +498,30 @@ export default function EmployeeBooking({
     try {
       const timestampStr = Date.now().toString().slice(-4);
       const newRoomNumber = `RM-${timestampStr}`; // e.g. RM-1234
+      
+      const maxSequence = rooms.reduce((max, r) => (r.sequence !== undefined && r.sequence > max ? r.sequence : max), 0);
+      const calculatedSeq = newRoomSequence !== undefined ? Number(newRoomSequence) : (maxSequence + 1);
+
       const newRoom: Room = {
         id: newRoomNumber,
         roomType: newRoomType,
         capacity: newRoomCapacity,
         genderRestriction: newRoomGender as any,
+        roomName: newRoomName.trim() || '',
+        sequence: calculatedSeq,
+        floor: newRoomFloor.toString(),
         notes: 'สร้างห้องพักเพิ่มเติมโดยผู้ใช้งาน',
       };
       const updatedRooms = [...rooms, newRoom];
       await onUpdateRooms(updatedRooms);
       setActionSuccess(`สร้างห้องพัก ${newRoomNumber} (${newRoomType}) สำเร็จแล้ว! คุณสามารถเลือกห้องนี้ได้ทันที`);
       setIsAddingRoom(false);
+      
+      // Reset form states
+      setNewRoomName('');
+      setNewRoomSequence(undefined);
+      setNewRoomFloor(1);
+
       // Auto-select this newly created room
       setSelectedRoomNumber(newRoomNumber);
       setActiveStep(2);
@@ -456,6 +534,10 @@ export default function EmployeeBooking({
   };
 
   const handleBookingSubmit = async () => {
+    if (isReadOnlyEmployee) {
+      setActionError('⚠️ ไม่สามารถทำรายการจองได้เนื่องจากสิทธิ์ของคุณเป็นแบบอ่านอย่างเดียวครับ');
+      return;
+    }
     if (selectedPeopleIds.length === 0) {
       setActionError('⚠️ กรุณาเลือกพนักงานเพื่อทำการจองอย่างน้อย 1 คน');
       return;
@@ -598,6 +680,32 @@ export default function EmployeeBooking({
               </button>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Visitor Mode Warning Banner */}
+      {userRole === 'visitor' && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start gap-3 animate-in fade-in duration-300" id="visitor-mode-booking-notice">
+          <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <h4 className="text-xs font-black text-amber-900 font-display">โหมดผู้เยี่ยมชม (Visitor Mode) - อ่านอย่างเดียว</h4>
+            <p className="text-[11px] text-amber-700 mt-1 leading-relaxed">
+              คุณเข้าใช้งานในสถานะผู้เยี่ยมชม จึงสามารถดูผังห้องและรายชื่อผู้จองได้เท่านั้น ไม่สามารถกดจองห้องพัก เลือกผู้เข้าพัก หรือลบการจองใดๆ ได้ หากคุณต้องการจองห้องพัก โปรดสลับสิทธิ์เข้าสู่ระบบเป็น <b>"พนักงาน"</b> ในส่วนเมนูด้านบนสุดครับ
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Read Only Employee Warning Banner */}
+      {isReadOnlyEmployee && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start gap-3 animate-in fade-in duration-300" id="readonly-mode-booking-notice">
+          <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <h4 className="text-xs font-black text-amber-900 font-display">โหมดดูอย่างเดียว (Read-only Mode)</h4>
+            <p className="text-[11px] text-amber-700 mt-1 leading-relaxed">
+              เครื่องนี้ได้ผ่านการยืนยันตัวตนในชื่อพนักงานท่านอื่นเรียบร้อยแล้ว คุณสามารถเข้าชมข้อมูลการจัดห้องได้เท่านั้น แต่<b>ไม่สามารถส่งข้อมูลจองห้องพักหรือยกเลิกการจองได้</b>ครับ
+            </p>
+          </div>
         </div>
       )}
 
@@ -900,7 +1008,7 @@ export default function EmployeeBooking({
               <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 gap-3" id="rooms-grid-wizard">
                 {rooms.length === 0 ? (
                   <div className="col-span-full">
-                    {onUpdateRooms ? (
+                    {onUpdateRooms && userRole === 'admin' ? (
                       <button
                         onClick={() => setIsAddingRoom(true)}
                         className="w-full flex flex-col items-center justify-center p-8 bg-slate-50 hover:bg-indigo-50 border-2 border-dashed border-slate-200 hover:border-indigo-300 rounded-3xl transition-all cursor-pointer min-h-[160px] text-slate-500 hover:text-indigo-600 group"
@@ -921,7 +1029,7 @@ export default function EmployeeBooking({
                 ) : (
                   <>
                     {/* Create Room Card (Always visible if onUpdateRooms is present) */}
-                    {onUpdateRooms && (
+                    {onUpdateRooms && userRole === 'admin' && (
                       <button
                         onClick={() => setIsAddingRoom(true)}
                         className="flex flex-col items-center justify-center p-4 bg-slate-50 hover:bg-indigo-50 border-2 border-dashed border-slate-200 hover:border-indigo-300 rounded-3xl transition-all cursor-pointer h-full min-h-[120px] text-slate-500 hover:text-indigo-600 group"
@@ -1060,8 +1168,23 @@ export default function EmployeeBooking({
                                 🏨
                               </span>
                               <div className="truncate">
-                                <h3 className={`text-xs font-extrabold truncate leading-none mb-1 ${isFull ? 'text-slate-600' : 'text-slate-850'}`}>{room.roomType}</h3>
-                                <p className="text-[9px] truncate leading-normal text-slate-400" title={room.notes}>{room.notes || 'ห้องพักมาตรฐาน'}</p>
+                                {(() => {
+                                  const displaySeq = room.sequence !== undefined ? room.sequence : (rooms.findIndex(r => r.id === room.id) + 1);
+                                  return (
+                                    <>
+                                      <h3 className={`text-xs font-extrabold truncate leading-none mb-1 text-slate-800`}>
+                                        ห้องที่ {displaySeq}
+                                      </h3>
+                                      {room.roomName ? (
+                                        <p className={`text-[10px] font-bold truncate leading-normal ${isFull ? 'text-slate-500' : 'text-indigo-600'}`} title={room.roomName}>
+                                          {room.roomName}
+                                        </p>
+                                      ) : (
+                                        <p className="text-[9px] truncate leading-normal text-slate-400" title={room.notes}>{room.notes || room.roomType}</p>
+                                      )}
+                                    </>
+                                  );
+                                })()}
                               </div>
                             </div>
                           </div>
@@ -1691,11 +1814,17 @@ export default function EmployeeBooking({
                     <div className="w-full sm:w-auto flex flex-col sm:flex-row items-stretch gap-2">
                       <button
                         onClick={handleBookingSubmit}
-                        disabled={!validation.isValid || submitting || syncing}
+                        disabled={!validation.isValid || submitting || syncing || userRole === 'visitor'}
                         className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs py-2.5 px-6 rounded-xl transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer"
                       >
                         <Check className="w-4 h-4" />
-                        <span>{submitting ? 'กำลังจัดสรร...' : 'ยืนยันจองห้องพักทันที'}</span>
+                        <span>
+                          {userRole === 'visitor' 
+                            ? 'ไม่สามารถจองได้ (โหมดอ่านอย่างเดียว)' 
+                            : submitting 
+                              ? 'กำลังจัดสรร...' 
+                              : 'ยืนยันจองห้องพักทันที'}
+                        </span>
                       </button>
                     </div>
                   </div>
@@ -1720,13 +1849,60 @@ export default function EmployeeBooking({
               </h3>
               <button
                 onClick={() => setIsAddingRoom(false)}
-                className="text-slate-400 hover:text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-full p-1.5 transition-all"
+                disabled={submitting}
+                className="text-slate-400 hover:text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-full p-1.5 transition-all disabled:opacity-50"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
             
             <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                    ลำดับห้อง (เช่น 1, 2, 3...)
+                  </label>
+                  <input
+                    type="number"
+                    value={newRoomSequence !== undefined ? newRoomSequence : ''}
+                    onChange={(e) => setNewRoomSequence(e.target.value ? Number(e.target.value) : undefined)}
+                    min={1}
+                    disabled={submitting}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
+                    placeholder="เรียงอัตโนมัติ"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                    ชั้นที่ (เช่น 1, 2, 3...)
+                  </label>
+                  <input
+                    type="number"
+                    value={newRoomFloor}
+                    onChange={(e) => setNewRoomFloor(e.target.value ? Number(e.target.value) : 1)}
+                    min={1}
+                    disabled={submitting}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
+                    placeholder="ชั้น 1"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  ชื่อห้องพัก / รายละเอียดสถานที่
+                </label>
+                <textarea
+                  value={newRoomName}
+                  onChange={(e) => setNewRoomName(e.target.value)}
+                  disabled={submitting}
+                  rows={2}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 resize-none"
+                  placeholder="เช่น โซนรีสอร์ท บ้านริมธาร 881 เตียง 6 ฟุต 1 เตียง"
+                />
+              </div>
+
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
                   ประเภทห้องพัก
@@ -1736,11 +1912,11 @@ export default function EmployeeBooking({
                   onChange={(e) => {
                     const type = e.target.value;
                     setNewRoomType(type);
-                    // Standard defaults for capacities based on types (optional tweak)
                     if (type === 'Family Suite') setNewRoomCapacity(4);
                     else setNewRoomCapacity(2);
                   }}
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  disabled={submitting}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
                 >
                   <option value="Standard Twin">Standard Twin</option>
                   <option value="Deluxe King">Deluxe King</option>
@@ -1759,7 +1935,8 @@ export default function EmployeeBooking({
                     <button
                       key={cap}
                       onClick={() => setNewRoomCapacity(cap)}
-                      className={`py-2 rounded-xl text-xs font-bold transition-all border ${
+                      disabled={submitting}
+                      className={`py-2 rounded-xl text-xs font-bold transition-all border disabled:opacity-50 ${
                         newRoomCapacity === cap
                           ? 'bg-indigo-600 text-white border-indigo-600 shadow-md transform scale-105'
                           : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:bg-indigo-50'
@@ -1776,7 +1953,8 @@ export default function EmployeeBooking({
                     min="1"
                     value={newRoomCapacity}
                     onChange={(e) => setNewRoomCapacity(parseInt(e.target.value, 10) || 1)}
-                    className="w-20 border border-slate-200 rounded-lg px-2 py-1 text-xs bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    disabled={submitting}
+                    className="w-20 border border-slate-200 rounded-lg px-2 py-1 text-xs bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
                   />
                 </div>
               </div>
@@ -1788,7 +1966,8 @@ export default function EmployeeBooking({
                 <select
                   value={newRoomGender}
                   onChange={(e) => setNewRoomGender(e.target.value)}
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  disabled={submitting}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
                 >
                   <option value="ไม่จำกัด">ไม่จำกัดเพศ</option>
                   <option value="ชายล้วน">ชายล้วน</option>
@@ -1800,7 +1979,8 @@ export default function EmployeeBooking({
             <div className="pt-2 border-t border-slate-100 flex justify-end gap-2">
               <button
                 onClick={() => setIsAddingRoom(false)}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                disabled={submitting}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold transition-colors cursor-pointer disabled:opacity-50"
               >
                 ยกเลิก
               </button>

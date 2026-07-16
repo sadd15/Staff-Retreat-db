@@ -11,12 +11,21 @@ async function startServer() {
 
   // API routes
   app.get("/api/fetch-sheet", async (req, res) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    
     const url = req.query.url as string;
     if (!url) {
       return res.status(400).json({ error: "Missing URL" });
     }
     try {
-      const response = await fetch(url);
+      const response = await fetch(url, {
+        headers: {
+          'pragma': 'no-cache',
+          'cache-control': 'no-cache'
+        }
+      });
       if (!response.ok) {
         return res.status(response.status).json({ error: "Failed to fetch sheet" });
       }
@@ -106,6 +115,8 @@ async function startServer() {
       if (rooms && Array.isArray(rooms)) {
         const roomData = rooms.map(room => [
           room.id,
+          room.roomName || '',
+          room.sequence !== undefined ? room.sequence : '',
           room.roomType,
           room.capacity,
           room.genderRestriction,
@@ -115,7 +126,7 @@ async function startServer() {
         ]);
 
         // Add header
-        roomData.unshift(['RoomNumber', 'RoomType', 'Capacity', 'GenderRestriction', 'PricePerNight', 'Floor', 'Notes']);
+        roomData.unshift(['RoomNumber', 'RoomName', 'Sequence', 'RoomType', 'Capacity', 'GenderRestriction', 'PricePerNight', 'Floor', 'Notes']);
 
         await sheets.spreadsheets.values.clear({
           spreadsheetId,

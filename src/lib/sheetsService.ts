@@ -195,11 +195,13 @@ export async function fetchEmployees(accessToken: string, spreadsheetId: string)
  * Read and parse rooms from "Rooms" tab
  */
 export async function fetchRooms(accessToken: string, spreadsheetId: string): Promise<Room[]> {
-  const rows = await getSheetValues(accessToken, spreadsheetId, 'Rooms!A1:G100');
+  const rows = await getSheetValues(accessToken, spreadsheetId, 'Rooms!A1:I100');
   if (rows.length === 0) return [];
 
   const headers = rows[0].map(h => String(h).trim());
   const roomNumIdx = headers.indexOf('RoomNumber');
+  const roomNameIdx = headers.indexOf('RoomName');
+  const seqIdx = headers.indexOf('Sequence');
   const typeIdx = headers.indexOf('RoomType');
   const capacityIdx = headers.indexOf('Capacity');
   const genderIdx = headers.indexOf('GenderRestriction');
@@ -220,9 +222,12 @@ export async function fetchRooms(accessToken: string, spreadsheetId: string): Pr
     const capacityStr = getVal(row, capacityIdx !== -1 ? capacityIdx : 2, '2');
     const priceStr = getVal(row, priceIdx !== -1 ? priceIdx : 4, '0');
     const floorStr = getVal(row, floorIdx !== -1 ? floorIdx : 5, '1');
+    const seqStr = getVal(row, seqIdx !== -1 ? seqIdx : -1, '');
 
     rooms.push({
       id: getVal(row, roomNumIdx !== -1 ? roomNumIdx : 0, `R${i}`),
+      roomName: getVal(row, roomNameIdx !== -1 ? roomNameIdx : -1, ''),
+      sequence: seqStr ? parseInt(seqStr, 10) : undefined,
       roomType: getVal(row, typeIdx !== -1 ? typeIdx : 1, 'Standard'),
       capacity: parseInt(capacityStr, 10) || 2,
       genderRestriction: (getVal(row, genderIdx !== -1 ? genderIdx : 3, 'ไม่จำกัด') as any) || 'ไม่จำกัด',
@@ -258,18 +263,28 @@ export async function saveEmployees(accessToken: string, spreadsheetId: string, 
  * Save all rooms to "Rooms" sheet
  */
 export async function saveRooms(accessToken: string, spreadsheetId: string, rooms: Room[]): Promise<void> {
-  const headers = ['RoomNumber', 'RoomType', 'Capacity', 'GenderRestriction', 'PricePerNight', 'Floor', 'Notes'];
+  const headers = ['RoomNumber', 'RoomName', 'Sequence', 'RoomType', 'Capacity', 'GenderRestriction', 'PricePerNight', 'Floor', 'Notes'];
   const rows = [
     headers,
-    ...rooms.map(r => [r.id, r.roomType, r.capacity, r.genderRestriction, r.pricePerNight, r.floor, r.notes]),
+    ...rooms.map(r => [
+      r.id,
+      r.roomName || '',
+      r.sequence !== undefined ? r.sequence : '',
+      r.roomType,
+      r.capacity,
+      r.genderRestriction,
+      r.pricePerNight || 0,
+      r.floor || '1',
+      r.notes || ''
+    ]),
   ];
 
   const paddedRows = [...rows];
   while (paddedRows.length < 50) {
-    paddedRows.push(['', '', '', '', '', '', '']);
+    paddedRows.push(['', '', '', '', '', '', '', '', '']);
   }
 
-  await updateSheetValues(accessToken, spreadsheetId, 'Rooms!A1:G50', paddedRows);
+  await updateSheetValues(accessToken, spreadsheetId, 'Rooms!A1:I50', paddedRows);
 }
 
 /**

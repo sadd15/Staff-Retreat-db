@@ -103,10 +103,17 @@ function parseCSV(text: string): string[][] {
 export async function fetchFromPublicGoogleSheet(spreadsheetId: string): Promise<{ employees: Employee[], rooms: Room[] }> {
   try {
     // 1. Fetch Employees
-    const employeesUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv&sheet=Employees`;
-    const empRes = await fetch(`/api/fetch-sheet?url=${encodeURIComponent(employeesUrl)}`);
+    const employeesUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv&sheet=Employees&t=${Date.now()}`;
+    const empRes = await fetch(`/api/fetch-sheet?url=${encodeURIComponent(employeesUrl)}&t=${Date.now()}`);
     if (!empRes.ok) throw new Error('ไม่สามารถเข้าถึงแท็บ Employees ได้ โปรดตรวจสอบว่าเปิดแชร์แบบ "ทุกคนที่มีลิงก์มีสิทธิ์อ่าน"');
     const empText = await empRes.text();
+
+    // Check if response is HTML (which happens when Google Sheets redirects to login page for private sheets)
+    const trimmedText = empText.trim().toLowerCase();
+    if (trimmedText.startsWith('<!doctype html') || trimmedText.includes('<html') || trimmedText.includes('<head>') || trimmedText.includes('google-site-verification') || trimmedText.includes('sign in - google accounts')) {
+      throw new Error('ลิงก์ Google Sheets นี้ไม่สามารถเข้าถึงได้แบบสาธารณะ หรือระบบต้องการรหัสผ่าน (ตรวจพบหน้าเว็บ HTML แทนที่จะเป็นข้อมูล CSV)! โปรดเปลี่ยนการตั้งค่าแชร์ใน Google Sheets ของคุณให้เป็น "ทุกคนที่มีลิงก์มีสิทธิ์อ่าน" (Anyone with the link can view) แล้วลองใหม่อีกครั้ง');
+    }
+
     const empRows = parseCSV(empText);
 
     const employees: Employee[] = [];
@@ -124,18 +131,27 @@ export async function fetchFromPublicGoogleSheet(spreadsheetId: string): Promise
         return 'ชาย';
       };
 
+      let validEmpCount = 0;
       for (let i = 1; i < empRows.length; i++) {
         const row = empRows[i];
-        if (row.length === 0 || !row[0]) continue;
+        if (!row || row.length === 0) continue;
 
-        const name = getVal(row, 0, 'ไม่มีชื่อ');
-        const dept = getVal(row, 1, 'ทั่วไป');
+        const name = getVal(row, 0, '').trim();
+        const dept = getVal(row, 1, 'ทั่วไป').trim();
         
+        // Strict Filter: Skip empty rows, headers, or lines without a real name
+        if (!name || name === 'ไม่มีชื่อ' || name === 'Name' || name === 'ชื่อ' || name === 'ชื่อ-นามสกุล' || name === 'ชื่อ - นามสกุล' || name === 'ชื่อ - สกุล') {
+          continue;
+        }
+
         // Debugging the row structure
-        console.log(`Row ${i} - Col 0 (Name): ${name}, Col 1 (Dept): ${dept}`);
+        console.log(`Row ${i} -> Valid Employee ${validEmpCount + 1}: Name="${name}", Dept="${dept}"`);
+
+        validEmpCount++;
+        const empId = `EMP${String(validEmpCount).padStart(3, '0')}`;
 
         employees.push({
-          id: `EMP${String(i).padStart(3, '0')}`,
+          id: empId,
           name: name,
           gender: detectGender(name),
           department: dept,
@@ -144,6 +160,7 @@ export async function fetchFromPublicGoogleSheet(spreadsheetId: string): Promise
           checkedIn: false,
         });
       }
+      console.log(`Parsed ${validEmpCount} valid employees from Google Sheet.`);
     }
 
     // 2. Fetch Rooms (We no longer fetch from Google Sheets, returning empty array here)
@@ -172,20 +189,61 @@ export async function syncSheetToFirestore(spreadsheetId: string, customConfig?:
     });
 
     // Save Employees to Firestore in Batches (Update existing or add new)
-    const empBatch = writeBatch(db);
-    employees.forEach(emp => {
-      const ref = doc(db, 'employees', emp.id);
-      empBatch.set(ref, {
-        id: emp.id,
-        name: emp.name,
-        gender: emp.gender,
-        department: emp.department,
-        roomId: emp.roomId || '',
-        rsvpStatus: emp.rsvpStatus || 'ยังไม่ระบุ',
-        checkedIn: emp.checkedIn || false
-      }, { merge: true }); // Use merge to avoid overwriting rsvpStatus if they already exist
+    const BATCH_LIMIT = 450;
+    for (let i = 0; i < employees.length; i += BATCH_LIMIT) {
+      const empBatch = writeBatch(db);
+      const chunk = employees.slice(i, i + BATCH_LIMIT);
+      chunk.forEach(emp => {
+        const ref = doc(db, 'employees', emp.id);
+        empBatch.set(ref, {
+          id: emp.id,
+          name: emp.name,
+          gender: emp.gender,
+          department: emp.department,
+          roomId: emp.roomId || '',
+          rsvpStatus: emp.rsvpStatus || 'ยังไม่ระบุ',
+          checkedIn: emp.checkedIn || false
+        }, { merge: true }); // Use merge to avoid overwriting rsvpStatus if they already exist
+      });
+      await empBatch.commit();
+    }
+
+    // Smart Cleanup: Delete any employees from Firestore whose IDs are not in the new Sheet list
+    const activeEmpIds = new Set(employees.map(e => e.id));
+    const currentEmployeesSnapshot = await getDocs(collection(db, 'employees'));
+    const idsToDelete: string[] = [];
+    currentEmployeesSnapshot.forEach(docSnap => {
+      if (!activeEmpIds.has(docSnap.id)) {
+        idsToDelete.push(docSnap.id);
+      }
     });
-    await empBatch.commit();
+
+    if (idsToDelete.length > 0) {
+      for (let i = 0; i < idsToDelete.length; i += BATCH_LIMIT) {
+        const deleteBatch = writeBatch(db);
+        const chunk = idsToDelete.slice(i, i + BATCH_LIMIT);
+        chunk.forEach(id => {
+          deleteBatch.delete(doc(db, 'employees', id));
+        });
+        await deleteBatch.commit();
+      }
+
+      // Clean up room bookings for deleted employees
+      const existingRoomsSnapshot = await getDocs(collection(db, 'rooms'));
+      const roomsBatch = writeBatch(db);
+      existingRoomsSnapshot.forEach(roomSnap => {
+        const roomData = roomSnap.data();
+        const roomEmpIds: string[] = roomData.employees || [];
+        const updatedRoomEmpIds = roomEmpIds.filter(id => !idsToDelete.includes(id));
+        if (updatedRoomEmpIds.length !== roomEmpIds.length) {
+          roomsBatch.update(roomSnap.ref, {
+            employees: updatedRoomEmpIds,
+            updatedAt: serverTimestamp()
+          });
+        }
+      });
+      await roomsBatch.commit();
+    }
 
     // We no longer sync rooms from Google Sheets, as they are managed via the web UI.
     // Just fetch the existing rooms from Firestore to return them.
@@ -198,6 +256,80 @@ export async function syncSheetToFirestore(spreadsheetId: string, customConfig?:
     return { employees, rooms: existingRooms };
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, 'sync');
+    throw error;
+  }
+}
+
+/**
+ * Clean re-sync of Google Sheet: Deletes all existing employees in Firestore,
+ * clears all room assignments (resets bookings), and then imports the new employee list from the Sheet.
+ */
+export async function cleanSyncSheetToFirestore(spreadsheetId: string, customConfig?: SheetConfig): Promise<{ employees: Employee[], rooms: Room[] }> {
+  try {
+    // 1. Fetch from sheet first to verify URL/access works before destructive action
+    const { employees: newEmployees } = await fetchFromPublicGoogleSheet(spreadsheetId);
+
+    // 2. Clear Google Sheet configuration in settings doc (set active state)
+    await setDoc(doc(db, 'settings', 'config'), {
+      rsvpClosed: false,
+      spreadsheetId,
+      spreadsheetName: customConfig?.spreadsheetName || 'สเปรดชีตส่วนตัวที่ซิงค์ผ่านลิงก์',
+      spreadsheetUrl: customConfig?.spreadsheetUrl || `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`
+    }, { merge: true });
+
+    // 3. Fetch all current employees in Firestore to delete them
+    const employeesSnapshot = await getDocs(collection(db, 'employees'));
+    const allDocRefs = employeesSnapshot.docs.map(docSnap => docSnap.ref);
+    
+    // Deleting in batches of 450 (Firestore limit is 500)
+    const BATCH_LIMIT = 450;
+    for (let i = 0; i < allDocRefs.length; i += BATCH_LIMIT) {
+      const deleteBatch = writeBatch(db);
+      const chunk = allDocRefs.slice(i, i + BATCH_LIMIT);
+      chunk.forEach(ref => {
+        deleteBatch.delete(ref);
+      });
+      await deleteBatch.commit();
+    }
+
+    // 4. Fetch all current rooms in Firestore to clear their employee arrays (unbook all)
+    const roomsSnapshot = await getDocs(collection(db, 'rooms'));
+    const roomsBatch = writeBatch(db);
+    const existingRooms: Room[] = [];
+    roomsSnapshot.forEach(docSnap => {
+      roomsBatch.update(docSnap.ref, {
+        employees: [],
+        updatedAt: serverTimestamp()
+      });
+      existingRooms.push({
+        ...(docSnap.data() as Room),
+        employees: []
+      });
+    });
+    await roomsBatch.commit();
+
+    // 5. Save the fresh sheet employees into Firestore (without merge, just set cleanly)
+    for (let i = 0; i < newEmployees.length; i += BATCH_LIMIT) {
+      const insertBatch = writeBatch(db);
+      const chunk = newEmployees.slice(i, i + BATCH_LIMIT);
+      chunk.forEach(emp => {
+        const ref = doc(db, 'employees', emp.id);
+        insertBatch.set(ref, {
+          id: emp.id,
+          name: emp.name,
+          gender: emp.gender,
+          department: emp.department,
+          roomId: '',
+          rsvpStatus: 'ยังไม่ระบุ',
+          checkedIn: false
+        });
+      });
+      await insertBatch.commit();
+    }
+
+    return { employees: newEmployees, rooms: existingRooms };
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, 'cleanSync');
     throw error;
   }
 }
@@ -219,6 +351,7 @@ export function listenToEmployees(callback: (employees: Employee[]) => void) {
         roomId: d.roomId || '',
         rsvpStatus: d.rsvpStatus || 'ยังไม่ระบุ',
         checkedIn: d.checkedIn || false,
+        verified: d.verified || false,
       });
     });
     callback(emps);
@@ -244,6 +377,8 @@ export function listenToRooms(callback: (rooms: Room[]) => void) {
         pricePerNight: d.pricePerNight,
         floor: d.floor,
         notes: d.notes || '',
+        roomName: d.roomName || '',
+        sequence: d.sequence !== undefined ? Number(d.sequence) : undefined,
         employees: d.employees || [],
       });
     });
@@ -357,6 +492,22 @@ export async function updateCheckInStatus(id: string, checkedIn: boolean): Promi
     const ref = doc(db, 'employees', id);
     await updateDoc(ref, { 
       checkedIn,
+      updatedAt: serverTimestamp()
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+/**
+ * Update an employee's Verification state
+ */
+export async function updateEmployeeVerification(id: string, verified: boolean): Promise<void> {
+  const path = `employees/${id}`;
+  try {
+    const ref = doc(db, 'employees', id);
+    await updateDoc(ref, { 
+      verified,
       updatedAt: serverTimestamp()
     });
   } catch (error) {
@@ -547,6 +698,39 @@ export async function resetAllBookingsInFirestore(): Promise<void> {
 }
 
 /**
+ * Wipe all employees in the system (deletes all employee records and clears all room bookings)
+ */
+export async function wipeAllEmployeesInFirestore(): Promise<void> {
+  const path = 'bulk-wipe-employees';
+  try {
+    const employeesSnapshot = await getDocs(collection(db, 'employees'));
+    const allDocRefs = employeesSnapshot.docs.map(docSnap => docSnap.ref);
+    
+    const BATCH_LIMIT = 450;
+    for (let i = 0; i < allDocRefs.length; i += BATCH_LIMIT) {
+      const deleteBatch = writeBatch(db);
+      const chunk = allDocRefs.slice(i, i + BATCH_LIMIT);
+      chunk.forEach(ref => {
+        deleteBatch.delete(ref);
+      });
+      await deleteBatch.commit();
+    }
+
+    const roomsSnapshot = await getDocs(collection(db, 'rooms'));
+    const roomsBatch = writeBatch(db);
+    roomsSnapshot.forEach(docSnap => {
+      roomsBatch.update(docSnap.ref, { 
+        employees: [],
+        updatedAt: serverTimestamp()
+      });
+    });
+    await roomsBatch.commit();
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+/**
  * Bulk update rooms in Firestore
  */
 export async function updateRoomsInFirestore(updatedRooms: Room[]): Promise<void> {
@@ -681,6 +865,26 @@ export async function cancelBookingInFirestore(employeeId: string, oldRoomId?: s
         });
       }
     });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+/**
+ * Reset all verification states in Firestore
+ */
+export async function resetAllVerificationsInFirestore(): Promise<void> {
+  const path = 'bulk-reset-verifications';
+  try {
+    const employeesSnapshot = await getDocs(collection(db, 'employees'));
+    const batch = writeBatch(db);
+    employeesSnapshot.forEach(docSnap => {
+      batch.update(docSnap.ref, { 
+        verified: false,
+        updatedAt: serverTimestamp()
+      });
+    });
+    await batch.commit();
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
   }

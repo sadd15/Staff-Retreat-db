@@ -1,6 +1,6 @@
 import React from 'react';
 import { SheetConfig } from '../types';
-import { LogOut, RefreshCw, FileSpreadsheet, ExternalLink, Shield, Users, CalendarCheck, FileText, Hotel } from 'lucide-react';
+import { LogOut, RefreshCw, FileSpreadsheet, ExternalLink, Shield, Users, CalendarCheck, FileText, Hotel, ArrowLeftRight, UserCheck } from 'lucide-react';
 import { User } from 'firebase/auth';
 
 interface HeaderProps {
@@ -12,6 +12,11 @@ interface HeaderProps {
   activeTab: 'rsvp' | 'booking' | 'directory' | 'summary' | 'admin';
   setActiveTab: (tab: 'rsvp' | 'booking' | 'directory' | 'summary' | 'admin') => void;
   isOfflineMode?: boolean;
+  userRole: 'visitor' | 'employee' | 'admin' | null;
+  selectedEmployeeName: string | null;
+  selectedDepartment: string | null;
+  onSwitchRole: () => void;
+  isReadOnlyEmployee?: boolean;
 }
 
 export default function Header({
@@ -23,14 +28,19 @@ export default function Header({
   activeTab,
   setActiveTab,
   isOfflineMode = false,
+  userRole,
+  selectedEmployeeName,
+  selectedDepartment,
+  onSwitchRole,
+  isReadOnlyEmployee = false,
 }: HeaderProps) {
-  const tabs = [
+  const tabs: { id: 'rsvp' | 'booking' | 'directory' | 'summary' | 'admin'; label: string; icon: any }[] = [
     { id: 'rsvp', label: 'เช็คชื่อ (RSVP)', icon: CalendarCheck },
     { id: 'booking', label: 'จองห้องพัก', icon: Users },
     { id: 'directory', label: 'ตารางจองรายห้อง', icon: Hotel },
     { id: 'summary', label: 'สรุปข้อมูล (ส่ง Line)', icon: FileText },
-    { id: 'admin', label: 'แดชบอร์ดแอดมิน', icon: Shield },
-  ] as const;
+    ...(userRole === 'admin' ? [{ id: 'admin' as const, label: 'แดชบอร์ดแอดมิน', icon: Shield }] : []),
+  ];
 
   return (
     <header className="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-xs" id="app-header">
@@ -73,6 +83,43 @@ export default function Header({
 
           {/* Auth Status & Controls */}
           <div className="flex items-center gap-3">
+            {/* User Role Badge & Switch Mode Button */}
+            {userRole && (
+              <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-2xl shadow-3xs">
+                {userRole === 'visitor' && (
+                  <span className="text-[10px] font-black text-slate-500 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                    👀 ผู้เยี่ยมชม
+                  </span>
+                )}
+                {userRole === 'employee' && (
+                  <span className="text-[10px] font-black text-indigo-600 flex items-center gap-1 max-w-[150px] sm:max-w-none truncate" title={`${selectedEmployeeName} (${selectedDepartment})`}>
+                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isReadOnlyEmployee ? 'bg-amber-500' : 'bg-emerald-500'}`}></span>
+                    👤 {selectedEmployeeName || 'พนักงาน'} <span className="text-[9px] text-slate-400 font-normal">({selectedDepartment})</span>
+                    {isReadOnlyEmployee && (
+                      <span className="text-[9px] bg-amber-500 text-white font-black px-1.5 py-0.2 rounded-md shrink-0 ml-1">
+                        🔒 อ่านอย่างเดียว
+                      </span>
+                    )}
+                  </span>
+                )}
+                {userRole === 'admin' && (
+                  <span className="text-[10px] font-black text-amber-600 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                    👑 ผู้ดูแลระบบ
+                  </span>
+                )}
+
+                <button
+                  onClick={onSwitchRole}
+                  className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-lg transition-all ml-1"
+                  title="สลับโหมด / ออกจากโหมดนี้"
+                >
+                  <ArrowLeftRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
             {sheetConfig && activeTab === 'admin' && (
               <div className="hidden md:flex items-center gap-2 bg-emerald-50/50 border border-emerald-100/60 px-3 py-1.5 rounded-xl">
                 <FileSpreadsheet className="w-4 h-4 text-emerald-600 shrink-0" />
