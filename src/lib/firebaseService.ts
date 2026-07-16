@@ -559,8 +559,15 @@ export async function syncFirestoreToSheet(spreadsheetId: string, employees: Emp
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Failed to sync to Google Sheets');
+      let errorMsg = 'Failed to sync to Google Sheets';
+      const rawText = await response.text().catch(() => '');
+      try {
+        const errorData = JSON.parse(rawText);
+        errorMsg = errorData.error || errorMsg;
+      } catch (e) {
+        errorMsg = rawText ? `Error (${response.status}): ${rawText.slice(0, 250)}` : `HTTP Error ${response.status}`;
+      }
+      throw new Error(errorMsg);
     }
   } catch (error) {
     console.error('Error syncing to Google Sheets:', error);
@@ -592,7 +599,16 @@ export async function seedDemoDataToFirestore(): Promise<void> {
       { id: 'EMP016', name: 'นางสาวมณีรัตน์ จิตรเจริญ', gender: 'หญิง', department: 'ฝ่ายบุคคล', roomId: '', rsvpStatus: 'ยังไม่ระบุ' },
     ];
 
-    const defaultRooms: Room[] = [];
+    const defaultRooms: Room[] = [
+      { id: '101', roomName: 'Deluxe Suite 101', sequence: 1, roomType: 'Deluxe Suite', capacity: 2, genderRestriction: 'ไม่จำกัด', pricePerNight: 2500, floor: '1', notes: 'วิวทะเล เตียงคู่', employees: [] },
+      { id: '102', roomName: 'Deluxe Suite 102', sequence: 2, roomType: 'Deluxe Suite', capacity: 2, genderRestriction: 'ไม่จำกัด', pricePerNight: 2500, floor: '1', notes: 'วิวทะเล เตียงคู่', employees: [] },
+      { id: '103', roomName: 'Grand Deluxe 103', sequence: 3, roomType: 'Grand Deluxe', capacity: 2, genderRestriction: 'ไม่จำกัด', pricePerNight: 3000, floor: '1', notes: 'วิวสวน อ่างอาบน้ำ', employees: [] },
+      { id: '201', roomName: 'Superior 201', sequence: 4, roomType: 'Superior Room', capacity: 2, genderRestriction: 'ไม่จำกัด', pricePerNight: 2000, floor: '2', notes: 'วิวภูเขา เตียงเดี่ยวใหญ่', employees: [] },
+      { id: '202', roomName: 'Superior 202', sequence: 5, roomType: 'Superior Room', capacity: 2, genderRestriction: 'ไม่จำกัด', pricePerNight: 2000, floor: '2', notes: 'วิวภูเขา เตียงเดี่ยวใหญ่', employees: [] },
+      { id: '203', roomName: 'Superior 203', sequence: 6, roomType: 'Superior Room', capacity: 2, genderRestriction: 'ไม่จำกัด', pricePerNight: 2000, floor: '2', notes: 'วิวภูเขา เตียงเดี่ยวใหญ่', employees: [] },
+      { id: '301', roomName: 'Family Villa 301', sequence: 7, roomType: 'Family Villa', capacity: 4, genderRestriction: 'ไม่จำกัด', pricePerNight: 5000, floor: '3', notes: 'พูลวิลล่าสไตล์ครอบครัว 2 ห้องนอน', employees: [] },
+      { id: '302', roomName: 'Presidential Suite 302', sequence: 8, roomType: 'Presidential Suite', capacity: 4, genderRestriction: 'ไม่จำกัด', pricePerNight: 6000, floor: '3', notes: 'ห้องหรูชั้นบนสุด วิวพานอรามา', employees: [] },
+    ];
 
     // Update settings in Firestore
     await setDoc(doc(db, 'settings', 'config'), {

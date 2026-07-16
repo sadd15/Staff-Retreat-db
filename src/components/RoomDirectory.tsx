@@ -262,10 +262,10 @@ export default function RoomDirectory({
           <table className="hidden md:table w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-indigo-50 text-indigo-800 font-bold border-b border-indigo-100">
-                <th className="px-4 py-3 border-r border-indigo-100 w-[160px]">ห้องพัก</th>
-                <th className="px-4 py-3 border-r border-indigo-100 w-[140px]">ประเภท / เงื่อนไข</th>
-                <th className="px-4 py-3 border-r border-indigo-100">รายชื่อผู้เข้าพัก</th>
-                <th className="px-4 py-3 text-center whitespace-nowrap w-[120px]">สถานะ</th>
+                <th className="px-3 py-2 border-r border-indigo-100 w-[160px]">ห้องพัก</th>
+                <th className="px-3 py-2 border-r border-indigo-100 w-[140px]">ประเภท / เงื่อนไข</th>
+                <th className="px-3 py-2 border-r border-indigo-100">รายชื่อผู้เข้าพัก</th>
+                <th className="px-3 py-2 text-center whitespace-nowrap w-[120px]">สถานะ</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -277,17 +277,19 @@ export default function RoomDirectory({
 
                 return (
                   <tr key={room.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-4 py-2.5 align-top border-r border-slate-100">
+                    <td className="px-3 py-2 align-top border-r border-slate-100">
                       <div className="flex flex-col min-w-0">
                         <span className="font-bold text-slate-800 text-xs">ห้องที่ {room.sequence !== undefined ? room.sequence : index + 1}</span>
                         {room.roomName && (
-                          <span className="font-medium text-indigo-700 text-xs whitespace-pre-wrap leading-tight mt-1 mb-1">{room.roomName}</span>
+                          <span className="font-medium text-indigo-700 text-xs whitespace-pre-wrap leading-tight mt-0.5 mb-0.5">{room.roomName}</span>
                         )}
-                        <span className="text-[9px] font-bold text-slate-400 bg-slate-50 border border-slate-100 px-1.5 py-0.5 rounded w-fit mt-0.5">{room.roomType}</span>
+                        {room.roomType !== 'Standard Twin' && (
+                          <span className="text-[9px] font-bold text-slate-400 bg-slate-50 border border-slate-100 px-1.5 py-0.5 rounded w-fit mt-0.5">{room.roomType}</span>
+                        )}
                       </div>
                     </td>
-                    <td className="px-4 py-2.5 align-top border-r border-slate-100">
-                      <div className="flex flex-col gap-1">
+                    <td className="px-3 py-2 align-top border-r border-slate-100">
+                      <div className="flex flex-col gap-0.5">
                         <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-bold w-fit border ${
                           room.genderRestriction === 'ชายล้วน' ? 'bg-blue-50 text-blue-600 border-blue-100' :
                           room.genderRestriction === 'หญิงล้วน' ? 'bg-rose-50 text-rose-600 border-rose-100' :
@@ -300,21 +302,21 @@ export default function RoomDirectory({
                         </span>
                       </div>
                     </td>
-                    <td className="px-4 py-2.5 align-top border-r border-slate-100">
+                    <td className="px-3 py-2 align-top border-r border-slate-100">
                       {isEmpty ? (
-                        <div className="text-slate-300 py-1 font-medium">ยังไม่มีการจอง</div>
+                        <div className="text-slate-300 py-1 font-medium text-[11px]">ยังไม่มีการจอง</div>
                       ) : (
-                        <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+                        <div className="flex flex-wrap gap-x-3 gap-y-1">
                           {occupants.map(o => (
                             <div
                               key={o.id}
-                              className="flex items-center gap-2 group/item"
+                              className="flex items-center gap-1.5 group/item"
                             >
                               <div className={`w-1.5 h-1.5 rounded-full ${
                                 o.gender === 'หญิง' ? 'bg-rose-400' : 'bg-blue-400'
                               }`} />
-                              <span className="font-bold text-slate-700 text-[12px]">{o.name}</span>
-                              <span className="text-[10px] text-slate-400">({o.department})</span>
+                              <span className="font-bold text-slate-700 text-[11px]">{o.name}</span>
+                              <span className="text-[9px] text-slate-400">({o.department})</span>
                               {!isReadOnlyEmployee && (userRole === 'admin' || (userRole === 'employee' && selectedEmployeeId === o.id)) && (
                                 <button
                                   onClick={() => setCancelingEmp(o)}
@@ -329,7 +331,7 @@ export default function RoomDirectory({
                         </div>
                       )}
                     </td>
-                    <td className="px-4 py-2.5 text-center align-top">
+                    <td className="px-3 py-2 text-center align-top">
                       <div className="flex flex-col items-center gap-1">
                         <div className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold border ${
                           isFull ? 'bg-rose-50 text-rose-600 border-rose-100' : 
@@ -338,7 +340,7 @@ export default function RoomDirectory({
                         }`}>
                           {isFull ? 'เต็ม' : isEmpty ? 'ว่าง' : `${count}/${room.capacity}`}
                         </div>
-                        <div className="w-12 h-1 bg-slate-100 rounded-full overflow-hidden">
+                        <div className="w-10 h-1 bg-slate-100 rounded-full overflow-hidden">
                           <div 
                             className={`h-full transition-all duration-700 ${isFull ? 'bg-rose-400' : isEmpty ? 'bg-slate-200' : 'bg-emerald-400'}`} 
                             style={{ width: `${(count / room.capacity) * 100}%` }}
@@ -368,7 +370,9 @@ export default function RoomDirectory({
                       {room.roomName && (
                         <h5 className="font-medium text-indigo-700 text-xs whitespace-pre-wrap leading-tight mt-1">{room.roomName}</h5>
                       )}
-                      <p className="text-[9px] font-bold text-slate-400 bg-slate-50 border border-slate-100 px-1.5 py-0.5 rounded w-fit mt-1.5">{room.roomType}</p>
+                      {room.roomType !== 'Standard Twin' && (
+                        <p className="text-[9px] font-bold text-slate-400 bg-slate-50 border border-slate-100 px-1.5 py-0.5 rounded w-fit mt-1.5">{room.roomType}</p>
+                      )}
                     </div>
                     <span className={`px-2 py-0.5 rounded text-[9px] font-bold border shrink-0 ${
                       room.genderRestriction === 'ชายล้วน' ? 'bg-blue-50 text-blue-600 border-blue-100' :

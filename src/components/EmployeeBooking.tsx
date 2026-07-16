@@ -945,7 +945,7 @@ export default function EmployeeBooking({
                 {/* Filter 1: Room Type */}
                 <div className="overflow-hidden">
                   <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5 tracking-wider font-display">
-                    ประเภทห้องพัก (Room Comfort Level)
+                    ประเภทห้องพัก
                   </label>
                   <div className="flex flex-nowrap gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
                     <button

@@ -30,7 +30,9 @@ import {
   Copy,
   X,
   Hotel,
-  Settings
+  Settings,
+  Database,
+  Upload
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { toBlob, toPng } from 'html-to-image';
@@ -1478,6 +1480,87 @@ export default function AdminDashboard({
                     </>
                   )}
                 </button>
+              </div>
+
+              {/* Backup & Restore Section */}
+              <div className="pt-6 space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 border border-indigo-100/60 shadow-xs">
+                    <Database className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-black text-slate-800 font-display">สำรองและกู้คืนข้อมูล</h4>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Backup & Restore</p>
+                  </div>
+                </div>
+
+                <div className="p-5 bg-indigo-50/25 rounded-[1.5rem] border border-indigo-100/50 space-y-4">
+                  <p className="text-[11px] text-slate-500 leading-relaxed font-bold">
+                    คุณสามารถดาวน์โหลดข้อมูลทั้งหมด (ห้องพักและรายชื่อการจอง) เก็บไว้เป็นไฟล์สำรองข้อมูลส่วนตัวแบบ JSON หรือนำมาอัปโหลดเพื่อกู้คืนข้อมูลทั้งหมดของระบบได้ทันที
+                  </p>
+
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    {/* Backup Download Button */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        try {
+                          const backupData = {
+                            rooms,
+                            employees,
+                            backupDate: new Date().toISOString()
+                          };
+                          const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData, null, 2));
+                          const downloadAnchor = document.createElement('a');
+                          downloadAnchor.setAttribute("href", dataStr);
+                          downloadAnchor.setAttribute("download", `backup_staffretreat_${new Date().toISOString().split('T')[0]}.json`);
+                          document.body.appendChild(downloadAnchor);
+                          downloadAnchor.click();
+                          downloadAnchor.remove();
+                        } catch (err: any) {
+                          alert(`เกิดข้อผิดพลาดในการสำรองข้อมูล: ${err.message}`);
+                        }
+                      }}
+                      className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-black py-2.5 px-4 rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 font-display"
+                    >
+                      <Download className="w-4 h-4" />
+                      ดาวน์โหลดไฟล์สำรอง (.json)
+                    </button>
+
+                    {/* Restore Upload Button */}
+                    <label className="flex-1 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-[11px] font-black py-2.5 px-4 rounded-xl shadow-3xs transition-all flex items-center justify-center gap-2 cursor-pointer text-center font-display">
+                      <Upload className="w-4 h-4 text-indigo-500" />
+                      นำเข้าไฟล์เพื่อกู้คืน (.json)
+                      <input
+                        type="file"
+                        accept=".json"
+                        onChange={async (e) => {
+                          const fileReader = new FileReader();
+                          if (e.target.files && e.target.files[0]) {
+                            fileReader.readAsText(e.target.files[0], "UTF-8");
+                            fileReader.onload = async (event) => {
+                              try {
+                                const parsedData = JSON.parse(event.target?.result as string);
+                                if (!parsedData.rooms || !parsedData.employees) {
+                                  alert("รูปแบบไฟล์สำรองข้อมูลไม่ถูกต้อง กรุณาเลือกไฟล์ที่ดาวน์โหลดจากระบบนี้");
+                                  return;
+                                }
+                                if (confirm(`⚠️ ยืนยันการกู้คืนข้อมูล?\n\nการกระทำนี้จะเขียนทับข้อมูลห้องพัก (${parsedData.rooms.length} ห้อง) และพนักงาน (${parsedData.employees.length} คน) ทั้งหมดในระบบปัจจุบันด้วยข้อมูลจากไฟล์สำรอง!`)) {
+                                  await onUpdateRooms(parsedData.rooms);
+                                  await onUpdateEmployees(parsedData.employees);
+                                  alert("🎉 กู้คืนข้อมูลและอัปเดตระบบเรียบร้อยแล้ว!");
+                                }
+                              } catch (err: any) {
+                                alert(`เกิดข้อผิดพลาดในการนำเข้าข้อมูล: ${err.message}`);
+                              }
+                            };
+                          }
+                        }}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                </div>
               </div>
 
               {/* Reset System Button */}

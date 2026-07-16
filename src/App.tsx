@@ -587,7 +587,7 @@ export default function App() {
   };
 
   // Determine if database is empty/new and needs onboarding setup
-  const isNewSheet = !dataLoading && employees.length === 0 && rooms.length === 0;
+  const isNewSheet = !dataLoading && (!sheetConfig || !sheetConfig.spreadsheetId) && (employees.length === 0 || rooms.length === 0);
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col font-sans selection:bg-indigo-100 selection:text-indigo-900" id="app-root-container">
