@@ -1352,33 +1352,71 @@ export default function AdminDashboard({
                   {/* Step 1 */}
                   <div className="p-3 bg-white rounded-xl border border-slate-100 shadow-3xs space-y-1">
                     <p className="font-extrabold text-slate-800 flex items-center gap-1.5">
-                      <span className="w-5 h-5 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center text-[10px] border border-emerald-100">1</span>
-                      ตั้งค่า Google Sheet เป็นสาธารณะ
+                      <span className="w-5 h-5 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center text-[10px] border border-emerald-100 font-sans">1</span>
+                      ตั้งค่า Google Sheet เป็นสาธารณะ (สิทธิ์การอ่าน)
                     </p>
                     <p className="text-[10px] text-slate-500 leading-relaxed pl-6 font-medium">
-                      เปิดไฟล์ Google Sheet ของคุณ &gt; กดปุ่ม <b>"แชร์" (Share)</b> ที่มุมบนขวา &gt; เปลี่ยนสิทธิ์จาก "จำกัด" (Restricted) เป็น <b>"ทุกคนที่มีลิงก์" (Anyone with the link)</b> มีสิทธิ์เป็น <b>"ผู้อ่าน" (Viewer)</b> แล้วก๊อปปี้ลิงก์สเปรดชีตมาวางในช่องด้านบน
+                      เปิดสเปรดชีต Google Sheet &gt; กดปุ่ม <b>"แชร์" (Share)</b> &gt; เปลี่ยนสิทธิ์จาก "จำกัด" (Restricted) เป็น <b>"ทุกคนที่มีลิงก์" (Anyone with the link)</b> &gt; เลือกบทบาทเป็น <b>"ผู้อ่าน" (Viewer)</b> แล้วคัดลอกลิงก์มาวางในช่องระบุด้านบน
                     </p>
                   </div>
 
                   {/* Step 2 */}
                   <div className="p-3 bg-white rounded-xl border border-slate-100 shadow-3xs space-y-1">
                     <p className="font-extrabold text-slate-800 flex items-center gap-1.5">
-                      <span className="w-5 h-5 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center text-[10px] border border-indigo-100">2</span>
-                      เปิดใช้งานการเข้าสู่ระบบ Google ใน Firebase
+                      <span className="w-5 h-5 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center text-[10px] border border-indigo-100 font-sans">2</span>
+                      เปิดใช้งาน Google Auth และตั้งค่า Authorized Domains
                     </p>
-                    <p className="text-[10px] text-slate-500 leading-relaxed pl-6 font-medium">
-                      ไปที่ <b>Firebase Console</b> ของคุณ &gt; เมนู <b>Authentication</b> &gt; แท็บ <b>Sign-in method</b> &gt; กด <b>Add new provider</b> &gt; เลือก <b>Google</b> &gt; กด <b>Enable</b> &gt; กรอกอีเมลติดต่อ แล้วกด <b>Save (บันทึก)</b>
-                    </p>
+                    <div className="text-[10px] text-slate-500 leading-relaxed pl-6 font-medium space-y-1">
+                      <p>
+                        1. ไปที่หน้า <b>Firebase Console</b> &gt; เมนู <b>Authentication</b> &gt; แท็บ <b>Sign-in method</b> &gt; คลิก <b>Add new provider</b> &gt; เลือก <b>Google</b> &gt; กดสวิตช์ <b>Enable (เปิดใช้งาน)</b> &gt; เลือกอีเมลติดต่อของโครงการและบันทึก
+                      </p>
+                      <p>
+                        2. ในหน้าต่าง <b>Authentication</b> เดียวกัน ให้คลิกไปที่แท็บ <b>Settings</b> &gt; เลือกเมนู <b>Authorized domains</b> ที่แถบด้านซ้าย &gt; คลิกปุ่ม <b>Add domain</b> &gt; ป้อนโดเมน Vercel ของคุณ: <span className="font-mono bg-indigo-50 text-indigo-700 px-1 py-0.5 rounded font-bold">staffretreat-db.vercel.app</span> เพื่อให้ระบบสามารถส่งผ่านข้อมูลการเข้าสู่ระบบได้อย่างปลอดภัย
+                      </p>
+                    </div>
                   </div>
 
                   {/* Step 3 */}
                   <div className="p-3 bg-white rounded-xl border border-slate-100 shadow-3xs space-y-1">
                     <p className="font-extrabold text-slate-800 flex items-center gap-1.5">
-                      <span className="w-5 h-5 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center text-[10px] border border-amber-100">3</span>
-                      เพิ่มโดเมนของคุณใน Authorized Domains
+                      <span className="w-5 h-5 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center text-[10px] border border-amber-100 font-sans">3</span>
+                      นำชุดคีย์การตั้งค่า (Firebase Config) ไปใส่ในไฟล์ระบบ
+                    </p>
+                    <div className="text-[10px] text-slate-500 leading-relaxed pl-6 font-medium space-y-1">
+                      <p>
+                        1. กดไอคอนรูปฟันเฟือง ⚙️ (Project settings) ที่มุมซ้ายบนของ Firebase Console
+                      </p>
+                      <p>
+                        2. เลื่อนลงมาด้านล่างสุดที่หัวข้อ <b>Your apps</b> &gt; คลิกไอคอนเว็บ <b>(&lt;/&gt;)</b> เพื่อลงทะเบียนเว็บแอปพลิเคชัน (เช่น ตั้งชื่อว่า <span className="font-mono bg-slate-100 px-1 rounded">staffretreat-web</span>)
+                      </p>
+                      <p>
+                        3. คัดลอกค่าต่าง ๆ จากตัวแปร <span className="font-mono text-amber-600">firebaseConfig</span> ไปใส่แทนที่ในไฟล์คีย์หลัก <span className="font-mono bg-slate-100 px-1 text-slate-700 font-bold">/firebase-applet-config.json</span> ของคุณโดยให้มีลักษณะดังนี้:
+                      </p>
+                      <pre className="mt-1 p-2 bg-slate-900 text-slate-200 rounded-lg text-[9px] font-mono overflow-x-auto leading-normal">
+{`{
+  "projectId": "ไอดีโปรเจกต์ของคุณ",
+  "appId": "ไอดีแอปของคุณ",
+  "apiKey": "คีย์ API ของคุณ",
+  "authDomain": "โดเมน auth (เช่น xxx.firebaseapp.com)",
+  "firestoreDatabaseId": "(default)",
+  "storageBucket": "xxx.firebasestorage.app",
+  "messagingSenderId": "รหัสผู้ส่งข้อความ",
+  "measurementId": "",
+  "oAuthClientId": "",
+  "recaptchaSiteKey": ""
+}`}
+                      </pre>
+                    </div>
+                  </div>
+
+                  {/* Step 4 */}
+                  <div className="p-3 bg-white rounded-xl border border-slate-100 shadow-3xs space-y-1">
+                    <p className="font-extrabold text-slate-800 flex items-center gap-1.5">
+                      <span className="w-5 h-5 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center text-[10px] border border-rose-100 font-sans">4</span>
+                      อัปเดตโค้ดไปยัง GitHub เพื่ออัปเกรดอัตโนมัติบน Vercel
                     </p>
                     <p className="text-[10px] text-slate-500 leading-relaxed pl-6 font-medium">
-                      ในหน้า <b>Authentication</b> &gt; เลือกแท็บ <b>Settings</b> &gt; เมนู <b>Authorized domains</b> &gt; กด <b>Add domain</b> &gt; ใส่ชื่อโดเมนเว็บไซต์ของคุณ (เช่น <span className="font-mono bg-slate-50 px-1 py-0.5 rounded text-amber-600">username.github.io</span> หรือโดเมน Vercel ของคุณ) เพื่ออนุญาตการลงชื่อเข้าใช้ด้วยบัญชี Google
+                      แก้ไขไฟล์ <span className="font-mono bg-slate-100 px-1 font-bold">/firebase-applet-config.json</span> บน GitHub ของคุณให้เป็นข้อมูลของ Firebase ตัวใหม่ &gt; ระบบ Vercel จะดึงไปติดตั้งและเริ่มทำงานทันที (Auto-Deploy) คุณจะเข้าใช้งานผ่านลิงก์ <a href="https://staffretreat-db.vercel.app/" target="_blank" rel="noreferrer" className="text-indigo-600 underline font-bold">https://staffretreat-db.vercel.app/</a> และกดขอสิทธิ์เขียน Google Sheet ได้ทันที!
                     </p>
                   </div>
                 </div>
