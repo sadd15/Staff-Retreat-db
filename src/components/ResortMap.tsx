@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Employee, Room } from '../types';
-import { Maximize2, Minimize2 } from 'lucide-react';
+import { Maximize2, Minimize2, Copy, Download } from 'lucide-react';
+import { toBlob, toPng } from 'html-to-image';
 import Draggable, { DraggableCore, DraggableEvent } from 'react-draggable';
 
 interface ResortMapProps {
@@ -33,13 +34,13 @@ const Pin = ({ room, isFull, isAdmin, setSelectedRoom, onRoomSelect, index, posi
       {/* Pin Body */}
       <div className="relative flex flex-col items-center justify-center">
         {/* Circle containing number */}
-        <div className={`relative w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center border-2 shadow-lg z-10 transition-colors
+        <div className={`relative w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 rounded-full flex items-center justify-center border-[1.5px] sm:border-2 shadow-lg z-10 transition-colors
           ${isFull 
             ? 'bg-gradient-to-b from-rose-400 to-rose-600 border-white text-white shadow-rose-900/30' 
             : 'bg-gradient-to-b from-emerald-400 to-emerald-600 border-white text-white shadow-emerald-900/30'
           }`}
         >
-          <span className="text-[9px] sm:text-[10px] font-black font-sans tracking-tighter drop-shadow-sm">
+          <span className="text-[8px] sm:text-[9px] md:text-[10px] font-black font-sans tracking-tighter drop-shadow-sm">
             {index + 1}
           </span>
           
@@ -50,7 +51,7 @@ const Pin = ({ room, isFull, isAdmin, setSelectedRoom, onRoomSelect, index, posi
         </div>
         
         {/* Triangle Tail */}
-        <div className={`w-0 h-0 border-l-[3.5px] border-r-[3.5px] border-t-[4.5px] border-l-transparent border-r-transparent -mt-[1px] z-0
+        <div className={`w-0 h-0 border-l-[3px] sm:border-l-[3.5px] border-r-[3px] sm:border-r-[3.5px] border-t-[4px] sm:border-t-[4.5px] border-l-transparent border-r-transparent -mt-[1px] z-0
           ${isFull ? 'border-t-rose-600' : 'border-t-emerald-600'}`} 
         />
       </div>
@@ -316,6 +317,35 @@ export default function ResortMap({ rooms, employees, onUpdateRoom, isAdmin, map
     setMapRatio(null); // reset when URL changes to let it recalculate
   }, [currentMapUrl]);
 
+  const handleDownload = async () => {
+    const container = document.getElementById('map-container');
+    if (container) {
+      const dataUrl = await toPng(container, { backgroundColor: '#ffffff', pixelRatio: 2, filter: (node) => node.id !== 'map-controls' });
+      const link = document.createElement('a');
+      link.download = `resort-map-${activeZone}.png`;
+      link.href = dataUrl;
+      link.click();
+    }
+  };
+
+  const handleCopy = async () => {
+    const container = document.getElementById('map-container');
+    if (container) {
+      const blob = await toBlob(container, { backgroundColor: '#ffffff', pixelRatio: 2, filter: (node) => node.id !== 'map-controls' });
+      if (blob) {
+        try {
+          await navigator.clipboard.write([
+            new ClipboardItem({ 'image/png': blob })
+          ]);
+          alert('คัดลอกรูปภาพลงคลิปบอร์ดแล้ว');
+        } catch (err) {
+          console.error('Failed to copy: ', err);
+          alert('ไม่สามารถคัดลอกรูปภาพได้');
+        }
+      }
+    }
+  };
+
   return (
     <div className={`flex flex-col items-center w-full ${isFullscreen ? "fixed inset-0 z-[100] bg-slate-900/95 flex flex-col items-center justify-center p-2 sm:p-8" : ""}`}>
       {isFullscreen && (
@@ -341,15 +371,42 @@ export default function ResortMap({ rooms, employees, onUpdateRoom, isAdmin, map
              maxHeight: isFullscreen ? '90vh' : '70vh'
           } : {}}
         >
-        {!isFullscreen && (
-          <button onClick={() => setIsFullscreen(true)} className="absolute top-4 right-4 w-10 h-10 bg-white/90 backdrop-blur hover:bg-white text-slate-800 rounded-2xl flex items-center justify-center transition-all shadow-lg z-40 border border-slate-200 active:scale-95">
-            <Maximize2 className="w-5 h-5" />
+        <div id="map-controls" className={`absolute top-4 right-4 flex flex-col gap-2 ${isFullscreen ? 'z-[120]' : 'z-40'}`}>
+          <button 
+            onClick={() => setIsFullscreen(!isFullscreen)} 
+            title={isFullscreen ? "ย่อหน้าจอ" : "ขยายเต็มจอ"}
+            className="group w-10 h-10 bg-white/90 backdrop-blur hover:bg-white text-slate-800 rounded-2xl flex items-center justify-center transition-all shadow-lg border border-slate-200 active:scale-95 relative"
+          >
+            {isFullscreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
+            <span className="absolute right-12 bg-slate-800 text-white text-[10px] px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+              {isFullscreen ? "ย่อหน้าจอ" : "ขยายเต็มจอ"}
+            </span>
           </button>
-        )}
+          <button 
+            onClick={handleCopy} 
+            title="คัดลอกรูปภาพ"
+            className="group w-10 h-10 bg-indigo-500 hover:bg-indigo-600 text-white rounded-2xl flex items-center justify-center transition-all shadow-lg border border-indigo-600 active:scale-95 relative"
+          >
+            <Copy className="w-5 h-5" />
+            <span className="absolute right-12 bg-slate-800 text-white text-[10px] px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+              คัดลอก
+            </span>
+          </button>
+          <button 
+            onClick={handleDownload} 
+            title="ดาวน์โหลดรูปภาพ"
+            className="group w-10 h-10 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl flex items-center justify-center transition-all shadow-lg border border-emerald-600 active:scale-95 relative"
+          >
+            <Download className="w-5 h-5" />
+            <span className="absolute right-12 bg-slate-800 text-white text-[10px] px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+              ดาวน์โหลด
+            </span>
+          </button>
+        </div>
         <img
           src={currentMapUrl || "data:image/svg+xml;charset=UTF-8,%3Csvg%20width%3D%22800%22%20height%3D%22600%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Crect%20width%3D%22800%22%20height%3D%22600%22%20fill%3D%22%23cbd5e1%22%2F%3E%3Ctext%20x%3D%22400%22%20y%3D%22300%22%20font-size%3D%2230%22%20text-anchor%3D%22middle%22%20fill%3D%22%23475569%22%3E%E0%B8%81%E0%B8%A3%E0%B8%B8%E0%B8%93%E0%B8%B2%E0%B8%AD%E0%B8%B1%E0%B8%9B%E0%B9%82%E0%B8%AB%E0%B8%A5%E0%B8%94%E0%B8%A3%E0%B8%B9%E0%B8%9B%E0%B9%81%E0%B8%9C%E0%B8%99%E0%B8%97%E0%B8%B5%E0%B9%88%E0%B8%AA%E0%B8%B3%E0%B8%AB%E0%B8%A3%E0%B8%B1%E0%B8%9B%E0%B9%82%E0%B8%8B%E0%B8%99%E0%B8%99%E0%B8%B5%E0%B9%89%3C%2Ftext%3E%3C%2Fsvg%3E"}
           alt="Resort Map"
-          className={isFullscreen ? "max-w-full max-h-full object-contain" : "w-full h-full block"}
+          className="w-full h-full block"
           onLoad={(e) => {
             const { naturalWidth, naturalHeight } = e.currentTarget;
             if (naturalWidth && naturalHeight) setMapRatio(naturalWidth / naturalHeight);
