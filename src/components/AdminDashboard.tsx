@@ -70,6 +70,8 @@ interface AdminDashboardProps {
   onToggleRSVPClosed: (closed: boolean) => Promise<void>;
   isOfflineMode?: boolean;
   onWipeAllEmployees?: () => Promise<void>;
+  setActiveTab: (tab: 'rsvp' | 'booking' | 'directory' | 'summary' | 'admin') => void;
+  setBookingSelectedRoomId: (roomId: string) => void;
 }
 
 export default function AdminDashboard({
@@ -91,6 +93,8 @@ export default function AdminDashboard({
   onToggleRSVPClosed,
   isOfflineMode = false,
   onWipeAllEmployees,
+  setActiveTab,
+  setBookingSelectedRoomId,
 }: AdminDashboardProps) {
   const handleUpdateRoom = async (updatedRoom: Room) => {
     // For map position updates, we only update the specific field in Firestore
@@ -1062,7 +1066,18 @@ export default function AdminDashboard({
               </div>
             </div>
             
-            <ResortMap rooms={rooms} employees={employees} onUpdateRoom={handleUpdateRoom} isAdmin={true} mapImageUrl={sheetConfig?.mapImageUrl} mapImageUrlZone1={sheetConfig?.mapImageUrlZone1} mapImageUrlZone2={sheetConfig?.mapImageUrlZone2} onActiveZoneChange={setEditingMapZone} />
+            <ResortMap 
+              rooms={rooms} 
+              employees={employees} 
+              onUpdateRoom={handleUpdateRoom} 
+              isAdmin={true} 
+              mapImageUrl={sheetConfig?.mapImageUrl} 
+              mapImageUrlZone1={sheetConfig?.mapImageUrlZone1} 
+              mapImageUrlZone2={sheetConfig?.mapImageUrlZone2} 
+              onActiveZoneChange={setEditingMapZone} 
+              setActiveTab={setActiveTab}
+              setBookingSelectedRoomId={setBookingSelectedRoomId}
+            />
           </div>
         </div>
       )}

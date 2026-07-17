@@ -15,6 +15,8 @@ interface ResortMapProps {
   mapImageUrlZone2?: string;
   onRoomSelect?: (room: Room) => void;
   onActiveZoneChange?: (zone: 'main' | 'zone1' | 'zone2') => void;
+  setActiveTab?: (tab: 'rsvp' | 'booking' | 'directory' | 'summary' | 'admin') => void;
+  setBookingSelectedRoomId?: (roomId: string) => void;
 }
 
 const Pin = ({ room, isFull, isAdmin, setSelectedRoom, onRoomSelect, index, position, isActive }: { room: Room, isFull: boolean, isAdmin: boolean, setSelectedRoom: (r: Room) => void, onRoomSelect?: (r: Room) => void, index: number, position: {x: number, y: number}, isActive?: boolean }) => (
@@ -178,7 +180,7 @@ const DraggableWrapper = ({
   );
 };
 
-export default function ResortMap({ rooms, employees, onUpdateRoom, isAdmin, mapImageUrl, mapImageUrlZone1, mapImageUrlZone2, onRoomSelect, onActiveZoneChange }: ResortMapProps) {
+export default function ResortMap({ rooms, employees, onUpdateRoom, isAdmin, mapImageUrl, mapImageUrlZone1, mapImageUrlZone2, onRoomSelect, onActiveZoneChange, setActiveTab, setBookingSelectedRoomId }: ResortMapProps) {
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
   const [adminActiveRoom, setAdminActiveRoom] = useState<Room | null>(null);
   const [adminActivePos, setAdminActivePos] = useState<{ x: number, y: number } | null>(null);
@@ -523,7 +525,31 @@ export default function ResortMap({ rooms, employees, onUpdateRoom, isAdmin, map
                 <span className="text-lg sm:text-xl">🏠</span>
               </div>
               <h3 className="font-black text-base sm:text-lg text-slate-800">{selectedRoom.roomName}</h3>
-              <div className="inline-flex items-center gap-1.5 mt-1.5 px-2.5 py-1 bg-slate-100 rounded-full">
+              <div className="flex justify-center items-center gap-2 mt-2">
+                <span className="text-[9px] font-bold text-slate-500 uppercase">ID: {selectedRoom.id.slice(0, 6)}</span>
+                <div className="w-1 h-1 rounded-full bg-slate-300" />
+                <span className="text-[9px] font-bold text-slate-500 uppercase">จุได้: {selectedRoom.capacity}</span>
+              </div>
+              
+              {/* Occupants list */}
+              <div className="mt-4 w-full text-left">
+                <h4 className="text-[10px] font-bold text-slate-400 uppercase mb-2">รายชื่อผู้เข้าพัก</h4>
+                <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                  {employees.filter(e => e.roomId === selectedRoom.id).length > 0 ? (
+                    employees.filter(e => e.roomId === selectedRoom.id).map(e => (
+                      <div key={e.id} className="flex items-center gap-2 text-[11px] bg-slate-50 p-1.5 rounded-lg border border-slate-100">
+                         <div className={`w-1.5 h-1.5 rounded-full ${e.gender === 'หญิง' ? 'bg-rose-400' : 'bg-blue-400'}`} />
+                         <span className="font-bold text-slate-700">{e.name}</span>
+                         <span className="text-[9px] text-slate-400">({e.department})</span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-[11px] text-slate-400 italic">ยังไม่มีผู้เข้าพัก</div>
+                  )}
+                </div>
+              </div>
+
+              <div className="inline-flex items-center gap-1.5 mt-4 px-2.5 py-1 bg-slate-100 rounded-full">
                 <div className={`w-1.5 h-1.5 rounded-full ${employees.filter(e => e.roomId === selectedRoom.id).length >= selectedRoom.capacity ? 'bg-rose-500 animate-pulse' : 'bg-emerald-500'}`} />
                 <span className="text-[9px] sm:text-[10px] font-bold text-slate-600 uppercase tracking-wider">
                   พักแล้ว {employees.filter(e => e.roomId === selectedRoom.id).length} / {selectedRoom.capacity} คน
@@ -553,12 +579,22 @@ export default function ResortMap({ rooms, employees, onUpdateRoom, isAdmin, map
               </div>
             </div>
             
-            <div className="pt-4 shrink-0 mt-auto">
+            <div className="pt-4 shrink-0 mt-auto flex gap-2">
               <button 
-                className="w-full py-2.5 sm:py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[10px] sm:text-xs font-black transition-all shadow-lg shadow-indigo-100 active:scale-95"
+                className="flex-1 py-2.5 sm:py-3 bg-white hover:bg-slate-50 text-slate-700 rounded-xl text-[10px] sm:text-xs font-black transition-all shadow-sm border border-slate-200 active:scale-95"
                 onClick={() => setSelectedRoom(null)}
               >
-                เข้าใจแล้ว
+                ปิดหน้าต่าง
+              </button>
+              <button 
+                className="flex-1 py-2.5 sm:py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[10px] sm:text-xs font-black transition-all shadow-lg shadow-indigo-100 active:scale-95 flex items-center justify-center gap-1.5"
+                onClick={() => {
+                  if (setBookingSelectedRoomId) setBookingSelectedRoomId(selectedRoom.id);
+                  if (setActiveTab) setActiveTab('booking');
+                  setSelectedRoom(null);
+                }}
+              >
+                จองห้องนี้ / จัดการคนเข้าพัก
               </button>
             </div>
           </div>

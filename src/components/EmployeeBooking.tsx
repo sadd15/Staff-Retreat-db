@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Employee, Room } from '../types';
 import ResortMap from './ResortMap';
 import { 
@@ -42,6 +42,9 @@ interface EmployeeBookingProps {
   mapImageUrl?: string;
   mapImageUrlZone1?: string;
   mapImageUrlZone2?: string;
+  setActiveTab: (tab: 'rsvp' | 'booking' | 'directory' | 'summary' | 'admin') => void;
+  setBookingSelectedRoomId: (roomId: string) => void;
+  initialSelectedRoomId?: string;
 }
 
 export default function EmployeeBooking({
@@ -58,6 +61,9 @@ export default function EmployeeBooking({
   mapImageUrl,
   mapImageUrlZone1,
   mapImageUrlZone2,
+  setActiveTab,
+  setBookingSelectedRoomId,
+  initialSelectedRoomId
 }: EmployeeBookingProps) {
   // Stepper / Wizard state: 1 = Select Employee, 2 = Select Room, 3 = Select Roommates & Confirm
   const [activeStep, setActiveStep] = useState<1 | 2 | 3>(1);
@@ -66,6 +72,33 @@ export default function EmployeeBooking({
   // Core selection state
   const [selectedMainEmpId, setSelectedMainEmpId] = useState<string>('');
   const [selectedRoomNumber, setSelectedRoomNumber] = useState<string>('');
+
+  useEffect(() => {
+    if (initialSelectedRoomId) {
+      setRoomFilterGender('all'); // Ensure room is visible
+      setRoomFilterType('all');
+      setSelectedRoomNumber(initialSelectedRoomId);
+      setActiveStep(2); // Automatically go to Select Employee step
+      setShowWizardModal(true); // Ensure modal is open
+      
+      // Small delay to ensure the room is rendered before scrolling
+      setTimeout(() => {
+        // Scroll to the wizard main area first
+        const wizardArea = document.getElementById('booking-system-main');
+        if (wizardArea) {
+          wizardArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        
+        // Then scroll to the specific room
+        setTimeout(() => {
+          const element = document.getElementById(`room-${initialSelectedRoomId}`);
+          if (element) {
+            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }, 500);
+      }, 500);
+    }
+  }, [initialSelectedRoomId]);
   const [selectedRoommateIds, setSelectedRoommateIds] = useState<string[]>([]);
   const [mixedGenderConsent, setMixedGenderConsent] = useState(false);
 
@@ -75,7 +108,7 @@ export default function EmployeeBooking({
     if (selectedMainEmpId) {
        setActiveStep(3);
     } else {
-       setActiveStep(1);
+       setActiveStep(2);
     }
   };
 
@@ -448,14 +481,8 @@ export default function EmployeeBooking({
     }
     setSelectedRoomNumber(roomNum);
     
-    // If room has occupants, auto-select the first one as the "Main Booker" reference
-    const occupants = roomOccupantsMap[roomNum] || [];
-    if (occupants.length > 0) {
-      setSelectedMainEmpId(occupants[0].id);
-    } else {
-      setSelectedMainEmpId('');
-    }
-    
+    // Reset selections so user can pick NEW people to add to this room
+    setSelectedMainEmpId('');
     setSelectedRoommateIds([]);
     setMixedGenderConsent(false);
     setActionError(null);
@@ -847,7 +874,16 @@ export default function EmployeeBooking({
           </div>
         </div>
         <div className="p-2 sm:p-4 bg-slate-50/30">
-          <ResortMap rooms={rooms} employees={employees} isAdmin={false} mapImageUrl={mapImageUrl} mapImageUrlZone1={mapImageUrlZone1} mapImageUrlZone2={mapImageUrlZone2} />
+          <ResortMap 
+            rooms={rooms} 
+            employees={employees} 
+            isAdmin={false} 
+            mapImageUrl={mapImageUrl} 
+            mapImageUrlZone1={mapImageUrlZone1} 
+            mapImageUrlZone2={mapImageUrlZone2} 
+            setActiveTab={setActiveTab}
+            setBookingSelectedRoomId={setBookingSelectedRoomId}
+          />
         </div>
       </div>
 
@@ -935,7 +971,7 @@ export default function EmployeeBooking({
 
               {/* ================= STEP 1: SELECT ROOM FIRST ================= */}
               {activeStep === 1 && (
-                <div className="space-y-5 sm:space-y-6 animate-in fade-in duration-350">
+                <div className="space-y-5 sm:space-y-6 animate-in fade-in duration-350 pb-20">
                   
                   {/* Brief Guidelines */}
                   <div className="bg-indigo-50/50 border border-indigo-100/80 rounded-2xl p-4 flex gap-3 text-xs leading-relaxed text-indigo-800">
@@ -949,40 +985,39 @@ export default function EmployeeBooking({
                   </div>
 
                   {selectedRoomNumber && selectedRoom && (
-                    <div className="space-y-3">
-                      <div className="bg-slate-900 text-white rounded-2xl p-4 flex items-center justify-between shadow-md border border-slate-800">
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                      <div className="bg-slate-900 text-white rounded-2xl p-4 flex-1 flex items-center justify-between shadow-md border border-slate-800">
                         <div className="flex items-center gap-3">
                           <div className="w-9 h-9 rounded-lg bg-indigo-600 flex items-center justify-center font-display font-black text-xs text-white">
                             🏨
                           </div>
                           <div>
                             <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">ห้องพักที่เลือกไว้</p>
-                            <p className="text-xs font-bold font-display">{selectedRoom.roomType}</p>
+                            <p className="text-xs font-bold font-display">{selectedRoom.roomName || `ห้องที่ ${rooms.findIndex(r => r.id === selectedRoom.id) + 1}`}</p>
                           </div>
                         </div>
                         <button
                           type="button"
                           onClick={() => {
                             setSelectedRoomNumber('');
+                            if (setBookingSelectedRoomId) setBookingSelectedRoomId('');
                           }}
                           className="text-[10px] font-bold text-indigo-300 hover:text-white"
                         >
-                          เปลี่ยนห้อง
+                          เปลี่ยนห้อง / ยกเลิกการเชื่อมโยง
                         </button>
                       </div>
+                      
                       <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedRoomNumber('');
-                      setSelectedMainEmpId('');
-                      setSelectedRoommateIds([]);
-                    }}
-                    className="bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-bold py-1.5 px-3 rounded-lg transition-all cursor-pointer shadow-3xs"
-                  >
-                    ยกเลิกการเลือกห้องพักนี้
-                  </button>
-                </div>
-              )}
+                        type="button"
+                        onClick={() => setActiveStep(2)}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-black py-4 px-8 rounded-2xl transition-all cursor-pointer shadow-lg shadow-emerald-100 flex items-center justify-center gap-2 group active:scale-95"
+                      >
+                        ไปขั้นตอนต่อไป: เลือกพนักงาน
+                        <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                      </button>
+                    </div>
+                  )}
 
               {/* No search bar needed here, room filter is below */}
 
@@ -1145,8 +1180,13 @@ export default function EmployeeBooking({
                     return (
                       <div
                         key={room.id}
+                        id={`room-${room.id}`}
                         onClick={() => {
-                          if (!isFull && !isSelected) handleSelectRoom(room.id);
+                          if (!isFull && !isSelected) {
+                            handleSelectRoom(room.id);
+                          } else if (isSelected && !isFull) {
+                            setActiveStep(2);
+                          }
                         }}
                         className={`rounded-2xl border flex flex-col justify-between transition-all duration-250 relative overflow-hidden ${
                           genderTheme.border
@@ -1290,18 +1330,25 @@ export default function EmployeeBooking({
                             </span>
                             
                             {isSelected ? (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation(); // Prevent card onClick trigger
-                                  setSelectedRoomNumber('');
-                                  setSelectedMainEmpId('');
-                                  setSelectedRoommateIds([]);
-                                }}
-                                className="bg-rose-500 hover:bg-rose-600 text-white text-[9px] font-bold py-1 px-2 rounded-lg transition-all cursor-pointer shadow-3xs"
-                              >
-                                ยกเลิกการเลือก
-                              </button>
+                              <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-1 animate-pulse mr-1">
+                                  <span className="text-[9px] font-black text-indigo-600 uppercase tracking-tight">คลิกเพื่อจอง</span>
+                                  <ArrowRight className="w-2.5 h-2.5 text-indigo-600" />
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation(); // Prevent card onClick trigger
+                                    setSelectedRoomNumber('');
+                                    setSelectedMainEmpId('');
+                                    setSelectedRoommateIds([]);
+                                    if (setBookingSelectedRoomId) setBookingSelectedRoomId('');
+                                  }}
+                                  className="bg-rose-500 hover:bg-rose-600 text-white text-[9px] font-bold py-1 px-2 rounded-lg transition-all cursor-pointer shadow-3xs"
+                                >
+                                  ยกเลิก
+                                </button>
+                              </div>
                             ) : isFull ? (
                               <span className="text-[9px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-lg">
                                 เต็มเเล้ว
@@ -1404,18 +1451,17 @@ export default function EmployeeBooking({
 
                 <div className="p-3">
                   {/* Search inside Step 2 */}
-                  {currentRoomOccupants.length === 0 && (
-                    <div className="space-y-2 mb-3">
-                      <div className="relative">
-                        <Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-slate-400" />
-                        <input
-                          type="text"
-                          placeholder="ค้นหาชื่อผู้จองหลัก..."
-                          value={bookingSearchQuery}
-                          onChange={(e) => setBookingSearchQuery(e.target.value)}
-                          className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:bg-white"
-                        />
-                      </div>
+                  <div className="space-y-2 mb-3">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-slate-400" />
+                      <input
+                        type="text"
+                        placeholder="ค้นหาชื่อพนักงาน..."
+                        value={bookingSearchQuery}
+                        onChange={(e) => setBookingSearchQuery(e.target.value)}
+                        className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:bg-white"
+                      />
+                    </div>
                       
                       <div className="grid grid-cols-2 gap-1.5">
                         <select
@@ -1439,41 +1485,9 @@ export default function EmployeeBooking({
                         </select>
                       </div>
                     </div>
-                  )}
 
                   <div className="max-h-80 overflow-y-auto space-y-1.5 divide-y divide-slate-100/50">
-                    {currentRoomOccupants.length > 0 ? (
-                      /* Special mode: Adding to existing room */
-                      <div className="p-1 animate-in fade-in slide-in-from-bottom-2 duration-400">
-                         <div className="bg-indigo-50/50 border border-indigo-100 rounded-2xl p-5 text-center">
-                           <div className="w-12 h-12 bg-white text-indigo-600 rounded-2xl shadow-xs flex items-center justify-center mx-auto mb-3 border border-indigo-50">
-                             <Users className="w-6 h-6" />
-                           </div>
-                           <p className="text-xs font-bold text-slate-800">กำลังจัดสรรพนักงานเพิ่มเข้าห้องเดิม</p>
-                           <p className="text-[10px] text-slate-400 mt-1 mb-5">ระบบใช้พนักงานท่านแรกในห้องเป็นตัวแทนกลุ่ม:</p>
-                           
-                           <div className="bg-white border border-indigo-100/60 rounded-xl p-3.5 flex items-center gap-3 text-left shadow-xs">
-                             <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${currentRoomOccupants[0].gender === 'หญิง' ? 'bg-rose-400 ring-4 ring-rose-50' : 'bg-blue-400 ring-4 ring-blue-50'}`} />
-                             <div className="min-w-0 flex-1">
-                               <p className="text-xs font-bold text-slate-800 truncate">{currentRoomOccupants[0].name}</p>
-                               <div className="flex items-center gap-1.5 mt-0.5">
-                                 <p className="text-[9px] text-slate-400 font-medium truncate">{currentRoomOccupants[0].department}</p>
-                                 <span className="text-[8px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-bold uppercase">เดิม</span>
-                               </div>
-                             </div>
-                             <div className="bg-indigo-50 text-indigo-600 p-1.5 rounded-lg border border-indigo-100/40">
-                               <CheckCircle2 className="w-3.5 h-3.5" />
-                             </div>
-                           </div>
-                         </div>
-                         <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 mt-4 flex items-start gap-2.5">
-                           <HelpCircle className="w-3.5 h-3.5 text-amber-500 mt-0.5 shrink-0" />
-                           <p className="text-[10px] text-amber-700 leading-relaxed">
-                             พนักงานท่านนี้และเพื่อนร่วมห้องเดิมจะยังคงอยู่ในห้องนี้ตามปกติ คุณเพียงเลือกพนักงานท่านใหม่จาก <span className="font-bold underline">ส่วนที่ 2</span> เพื่อเพิ่มเข้าไป
-                           </p>
-                         </div>
-                      </div>
-                    ) : filteredMainEmployees.length === 0 ? (
+                    {filteredMainEmployees.length === 0 ? (
                       <div className="py-12 text-center text-xs text-slate-400 italic">
                         ไม่พบพนักงานในแผนกหรือชื่อนี้ที่ยังไม่ได้จอง
                       </div>
@@ -1501,7 +1515,7 @@ export default function EmployeeBooking({
                                 {emp.department} • รหัส: {emp.id}
                               </p>
                             </div>
-                            <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold ${
+                            <span className={`text-[9px] px-2 py-0.5 rounded-md font-bold ${
                               isSelected
                                 ? 'bg-white/20 text-white'
                                 : emp.gender === 'หญิง' ? 'bg-rose-50 text-rose-600 border border-rose-100/40' : 'bg-blue-50 text-blue-600 border border-blue-100/40'

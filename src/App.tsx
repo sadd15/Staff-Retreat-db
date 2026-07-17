@@ -49,6 +49,7 @@ export default function App() {
 
   // Tab Selection
   const [activeTab, setActiveTab] = useState<'rsvp' | 'booking' | 'directory' | 'summary' | 'admin'>('rsvp');
+  const [bookingSelectedRoomId, setBookingSelectedRoomId] = useState<string | null>(null);
   const [googleUser, setGoogleUser] = useState<any>(null);
   const [googleToken, setGoogleToken] = useState<string | null>(null);
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
@@ -1183,6 +1184,9 @@ export default function App() {
                     mapImageUrl={sheetConfig?.mapImageUrl}
                     mapImageUrlZone1={sheetConfig?.mapImageUrlZone1}
                     mapImageUrlZone2={sheetConfig?.mapImageUrlZone2}
+                    setActiveTab={setActiveTab}
+                    setBookingSelectedRoomId={setBookingSelectedRoomId}
+                    initialSelectedRoomId={bookingSelectedRoomId || undefined}
                   />
                 ) : activeTab === 'directory' ? (
                   <RoomDirectory
@@ -1219,6 +1223,8 @@ export default function App() {
                     onToggleRSVPClosed={handleToggleRSVPClosed}
                     isOfflineMode={false}
                     onWipeAllEmployees={handleWipeAllEmployees}
+                    setActiveTab={setActiveTab}
+                    setBookingSelectedRoomId={setBookingSelectedRoomId}
                   />
                 )}
               </motion.div>

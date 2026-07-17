@@ -3,7 +3,13 @@
 
 @theme {
   --font-sans: "Sarabun", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-display: "Sarabun", ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  body {
+    font-family: 'Sarabun', sans-serif;
+  }
 }
 
 @layer utilities {
