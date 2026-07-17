@@ -15,6 +15,7 @@ import {
   runTransaction,
   serverTimestamp
 } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { Employee, Room, SheetConfig } from '../types';
 
@@ -23,6 +24,8 @@ const app = initializeApp(firebaseConfig);
 export const db = initializeFirestore(app, {
   experimentalForceLongPolling: true,
 }, firebaseConfig.firestoreDatabaseId);
+
+export const storage = getStorage(app);
 
 // Error logging handler as per the firebase-integration skill instructions
 export enum OperationType {
@@ -380,6 +383,9 @@ export function listenToRooms(callback: (rooms: Room[]) => void) {
         roomName: d.roomName || '',
         sequence: d.sequence !== undefined ? Number(d.sequence) : undefined,
         employees: d.employees || [],
+        mapPosition: d.mapPosition,
+        mapPositionZone1: d.mapPositionZone1,
+        mapPositionZone2: d.mapPositionZone2,
       });
     });
     callback(rms);
@@ -391,7 +397,7 @@ export function listenToRooms(callback: (rooms: Room[]) => void) {
 /**
  * Set up real-time listener for Settings
  */
-export function listenToSettings(callback: (settings: { rsvpClosed: boolean; spreadsheetId?: string; spreadsheetName?: string; spreadsheetUrl?: string }) => void) {
+export function listenToSettings(callback: (settings: { rsvpClosed: boolean; spreadsheetId?: string; spreadsheetName?: string; spreadsheetUrl?: string; mapImageUrl?: string; mapImageUrlZone1?: string; mapImageUrlZone2?: string }) => void) {
   const path = 'settings';
   return onSnapshot(doc(db, 'settings', 'config'), (docSnap) => {
     if (docSnap.exists()) {
@@ -400,7 +406,10 @@ export function listenToSettings(callback: (settings: { rsvpClosed: boolean; spr
         rsvpClosed: d.rsvpClosed || false,
         spreadsheetId: d.spreadsheetId,
         spreadsheetName: d.spreadsheetName,
-        spreadsheetUrl: d.spreadsheetUrl
+        spreadsheetUrl: d.spreadsheetUrl,
+        mapImageUrl: d.mapImageUrl,
+        mapImageUrlZone1: d.mapImageUrlZone1,
+        mapImageUrlZone2: d.mapImageUrlZone2
       });
     } else {
       callback({ rsvpClosed: false });
@@ -524,6 +533,14 @@ export async function updateAdminPin(newPin: string): Promise<void> {
 }
 
 /**
+ * Update Map Image URL in settings
+ */
+export async function updateMapImageUrlInFirestore(url: string, field: 'mapImageUrl' | 'mapImageUrlZone1' | 'mapImageUrlZone2' = 'mapImageUrl'): Promise<void> {
+  const settingsRef = doc(db, 'settings', 'config');
+  await setDoc(settingsRef, { [field]: url }, { merge: true });
+}
+
+/**
  * Get Admin PIN from settings
  */
 export async function getAdminPin(): Promise<string> {
@@ -608,6 +625,14 @@ export async function seedDemoDataToFirestore(): Promise<void> {
       { id: '203', roomName: 'Superior 203', sequence: 6, roomType: 'Superior Room', capacity: 2, genderRestriction: 'ไม่จำกัด', pricePerNight: 2000, floor: '2', notes: 'วิวภูเขา เตียงเดี่ยวใหญ่', employees: [] },
       { id: '301', roomName: 'Family Villa 301', sequence: 7, roomType: 'Family Villa', capacity: 4, genderRestriction: 'ไม่จำกัด', pricePerNight: 5000, floor: '3', notes: 'พูลวิลล่าสไตล์ครอบครัว 2 ห้องนอน', employees: [] },
       { id: '302', roomName: 'Presidential Suite 302', sequence: 8, roomType: 'Presidential Suite', capacity: 4, genderRestriction: 'ไม่จำกัด', pricePerNight: 6000, floor: '3', notes: 'ห้องหรูชั้นบนสุด วิวพานอรามา', employees: [] },
+      // New Hotel Zone 1 Rooms
+      { id: 'H127', roomName: 'โซนโรงแรม ห้อง 127', sequence: 17, roomType: 'Hotel Room', capacity: 2, genderRestriction: 'ไม่จำกัด', pricePerNight: 1500, floor: '1', notes: 'โซนโรงแรม 1', employees: [] },
+      { id: 'H128', roomName: 'โซนโรงแรม ห้อง 128', sequence: 18, roomType: 'Hotel Room', capacity: 2, genderRestriction: 'ไม่จำกัด', pricePerNight: 1500, floor: '1', notes: 'โซนโรงแรม 1', employees: [] },
+      { id: 'H129', roomName: 'โซนโรงแรม ห้อง 129', sequence: 19, roomType: 'Hotel Room', capacity: 2, genderRestriction: 'ไม่จำกัด', pricePerNight: 1500, floor: '1', notes: 'โซนโรงแรม 1', employees: [] },
+      { id: 'H131', roomName: 'โซนโรงแรม ห้อง 131-132', sequence: 20, roomType: 'Hotel Room', capacity: 4, genderRestriction: 'ไม่จำกัด', pricePerNight: 3000, floor: '1', notes: 'โซนโรงแรม 1 (ห้องเชื่อม)', employees: [] },
+      // New Hotel Zone 2 Rooms
+      { id: 'H235', roomName: 'โซนโรงแรม ห้อง 235', sequence: 21, roomType: 'Hotel Room', capacity: 2, genderRestriction: 'ไม่จำกัด', pricePerNight: 1500, floor: '2', notes: 'โซนโรงแรม 2', employees: [] },
+      { id: 'H236', roomName: 'โซนโรงแรม ห้อง 236', sequence: 22, roomType: 'Hotel Room', capacity: 2, genderRestriction: 'ไม่จำกัด', pricePerNight: 1500, floor: '2', notes: 'โซนโรงแรม 2', employees: [] },
     ];
 
     // Update settings in Firestore
@@ -749,6 +774,20 @@ export async function wipeAllEmployeesInFirestore(): Promise<void> {
 /**
  * Bulk update rooms in Firestore
  */
+/**
+ * Update a single room's map position in Firestore
+ */
+export async function updateRoomPositionInFirestore(roomId: string, position?: { x: number; y: number }, positionZone1?: { x: number; y: number }, positionZone2?: { x: number; y: number }): Promise<void> {
+  const roomRef = doc(db, 'rooms', roomId);
+  const updateData: any = {};
+  if (position !== undefined) updateData.mapPosition = position;
+  if (positionZone1 !== undefined) updateData.mapPositionZone1 = positionZone1;
+  if (positionZone2 !== undefined) updateData.mapPositionZone2 = positionZone2;
+  if (Object.keys(updateData).length > 0) {
+    await updateDoc(roomRef, updateData);
+  }
+}
+
 export async function updateRoomsInFirestore(updatedRooms: Room[]): Promise<void> {
   const path = 'rooms';
   try {

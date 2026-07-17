@@ -302,10 +302,10 @@ export default function SummaryReport({ employees, rooms }: SummaryReportProps) 
             <div className="overflow-x-auto border border-slate-200 rounded-xl mt-4">
               <table className="w-full text-left text-sm border-collapse">
                 <thead>
-                  <tr className="bg-slate-100 text-slate-700 font-bold">
-                    <th className="px-4 py-3 border-r border-slate-200 w-1/4">ห้องพัก</th>
-                    <th className="px-4 py-3 border-r border-slate-200 w-[15%] text-center">ความจุ</th>
-                    <th className="px-4 py-3">รายชื่อผู้เข้าพัก</th>
+                  <tr className="bg-indigo-50 text-indigo-800 font-bold border-b border-indigo-100">
+                    <th className="px-3 py-2 border-r border-indigo-100 w-1/3">ห้องพัก</th>
+                    <th className="px-3 py-2 border-r border-indigo-100 w-[15%] text-center">ความจุ</th>
+                    <th className="px-3 py-2">รายชื่อผู้เข้าพัก</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -326,7 +326,6 @@ export default function SummaryReport({ employees, rooms }: SummaryReportProps) 
                         let houseNumber = 9999;
                         let slashNumber = 0;
 
-                        // Look for numbers like "881/1" or "881" in the roomName first
                         const patternMatch = name.match(/(\d+)(?:\/(\d+))?/);
                         if (patternMatch) {
                           houseNumber = Number(patternMatch[1]);
@@ -334,7 +333,6 @@ export default function SummaryReport({ employees, rooms }: SummaryReportProps) 
                             slashNumber = Number(patternMatch[2]);
                           }
                         } else {
-                          // Fallback to id
                           const idMatch = id.match(/(\d+)(?:\/(\d+))?/);
                           if (idMatch) {
                             houseNumber = Number(idMatch[1]);
@@ -355,49 +353,42 @@ export default function SummaryReport({ employees, rooms }: SummaryReportProps) 
                       const aKey = parseRoomSortKey(a);
                       const bKey = parseRoomSortKey(b);
 
-                      // 1. "ตามลำดับห้องที่" -> sequence
                       if (aKey.sequence !== bKey.sequence) {
                         return aKey.sequence - bKey.sequence;
                       }
 
-                      // 2. "ตามด้วยลำดับ" -> houseNumber
                       if (aKey.houseNumber !== bKey.houseNumber) {
                         return aKey.houseNumber - bKey.houseNumber;
                       }
 
-                      // 3. "ตามด้วยถ้ามีหมายเลขพวก /ด้านหลังให้เรียงตามลำดับให้ถูกต้อง" -> slashNumber
                       if (aKey.slashNumber !== bKey.slashNumber) {
                         return aKey.slashNumber - bKey.slashNumber;
                       }
 
-                      // 4. "ตามด้วยชั้น" -> floor
                       if (aKey.floor !== bKey.floor) {
                         return aKey.floor - bKey.floor;
                       }
 
-                      // 5. Fallback: string compare
                       return a.id.localeCompare(b.id, 'en', { numeric: true });
                     }).map((room, index) => {
                       const occupants = stats.occupantsByRoom[room.id] || [];
                       const displaySeq = room.sequence !== undefined ? room.sequence : (index + 1);
                       return (
-                        <tr key={room.id} className="hover:bg-slate-50 border-b border-slate-200 last:border-b-0">
-                          <td className="px-4 py-3 border-r border-slate-200 bg-slate-50/30">
-                            <div className="font-bold text-slate-800 mb-1">ห้องที่ {displaySeq}</div>
+                        <tr key={room.id} className="hover:bg-slate-50 border-b border-slate-100 last:border-b-0">
+                          <td className="px-3 py-2.5 border-r border-slate-100 bg-slate-50/20">
+                            <div className="font-bold text-slate-800 mb-0.5 text-xs">ห้องที่ {displaySeq}</div>
                             {room.roomName && (
-                              <div className="font-medium text-indigo-700 text-xs whitespace-pre-wrap leading-relaxed max-w-[200px] mb-1">{room.roomName}</div>
+                              <div className="font-medium text-indigo-700 text-xs whitespace-pre-wrap leading-relaxed mb-0.5">{room.roomName}</div>
                             )}
-                            <div className="text-[10px] text-slate-400 font-normal mt-1">{room.roomType}</div>
-                            <div className="text-[10px] text-indigo-500 font-normal mt-0.5">{room.genderRestriction}</div>
                           </td>
-                          <td className="px-4 py-3 border-r border-slate-200 text-center font-medium text-slate-600 bg-slate-50/30">
+                          <td className="px-3 py-2.5 border-r border-slate-100 text-center text-xs font-bold text-slate-600">
                             {occupants.length} / {room.capacity}
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="px-4 py-2.5">
                             {occupants.length === 0 ? (
-                              <span className="text-slate-400 italic text-xs">ว่างเปล่า</span>
+                              <span className="text-slate-300 italic text-xs">ยังไม่มีการจอง</span>
                             ) : (
-                              <div className="flex flex-col gap-1.5">
+                              <div className="flex flex-col gap-1">
                                 {occupants.map(o => (
                                   <div key={o.id} className="text-slate-700 text-xs flex items-center gap-2">
                                     <span className="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>

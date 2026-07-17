@@ -1,5 +1,9 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { storage, updateMapImageUrlInFirestore, updateRoomPositionInFirestore, db } from '../lib/firebaseService';
+import { collection, setDoc, doc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Employee, Room, SheetConfig } from '../types';
+import ResortMap from './ResortMap';
 import {
   Grid,
   Users,
@@ -88,11 +92,69 @@ export default function AdminDashboard({
   isOfflineMode = false,
   onWipeAllEmployees,
 }: AdminDashboardProps) {
-  const [activeSubTab, setActiveSubTab] = useState<'layout' | 'settings'>('layout');
+  const handleUpdateRoom = async (updatedRoom: Room) => {
+    // For map position updates, we only update the specific field in Firestore
+    // We do NOT call onUpdateRooms here because that overwrites the entire collection
+    // with potentially stale local state during rapid drag-and-drops.
+    if (updatedRoom.mapPosition || updatedRoom.mapPositionZone1 || updatedRoom.mapPositionZone2) {
+      try {
+        await updateRoomPositionInFirestore(updatedRoom.id, updatedRoom.mapPosition, updatedRoom.mapPositionZone1, updatedRoom.mapPositionZone2);
+      } catch (err) {
+        console.error("Failed to save room position directly:", err);
+      }
+    }
+  };
+  const [activeSubTab, setActiveSubTab] = useState<'layout' | 'settings' | 'map'>('layout');
   const [resetting, setResetting] = useState(false);
   const [editingRoom, setEditingRoom] = useState<Room | null>(null);
   const [deletingRoomId, setDeletingRoomId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [uploadingMap, setUploadingMap] = useState(false);
+  const [editingMapZone, setEditingMapZone] = useState<'main' | 'zone1' | 'zone2'>('main');
+  const [mapUrlInput, setMapUrlInput] = useState('');
+
+  useEffect(() => {
+    if (editingMapZone === 'main') {
+      setMapUrlInput(sheetConfig?.mapImageUrl || '');
+    } else if (editingMapZone === 'zone1') {
+      setMapUrlInput(sheetConfig?.mapImageUrlZone1 || '');
+    } else if (editingMapZone === 'zone2') {
+      setMapUrlInput(sheetConfig?.mapImageUrlZone2 || '');
+    }
+  }, [editingMapZone, sheetConfig?.mapImageUrl, sheetConfig?.mapImageUrlZone1, sheetConfig?.mapImageUrlZone2]);
+
+  const handleMapUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setUploadingMap(true);
+    try {
+      const field = editingMapZone === 'main' ? 'mapImageUrl' : editingMapZone === 'zone1' ? 'mapImageUrlZone1' : 'mapImageUrlZone2';
+      const fileName = editingMapZone === 'main' ? 'resort-map.jpg' : editingMapZone === 'zone1' ? 'resort-map-zone1.jpg' : 'resort-map-zone2.jpg';
+      const mapRef = ref(storage, fileName);
+      await uploadBytes(mapRef, file);
+      const url = await getDownloadURL(mapRef);
+      await updateMapImageUrlInFirestore(url, field);
+      alert('อัปโหลดแผนที่สำเร็จ');
+    } catch (error: any) {
+      console.error(error);
+      alert(`อัปโหลดผังรีสอร์ตล้มเหลว: ${error.message || 'เกิดข้อผิดพลาดไม่ทราบสาเหตุ'}`);
+    } finally {
+      setUploadingMap(false);
+    }
+  };
+
+  const handleSaveMapUrl = async () => {
+    try {
+      const field = editingMapZone === 'main' ? 'mapImageUrl' : editingMapZone === 'zone1' ? 'mapImageUrlZone1' : 'mapImageUrlZone2';
+      await updateMapImageUrlInFirestore(mapUrlInput, field);
+      alert('บันทึก URL แผนที่สำเร็จ');
+      console.log('Successfully saved map URL:', mapUrlInput);
+    } catch (error: any) {
+      console.error('Error saving map URL:', error);
+      alert(`บันทึก URL ล้มเหลว: ${error.message || 'เกิดข้อผิดพลาดไม่ทราบสาเหตุ'}`);
+    }
+  };
   const [empSearchQuery, setEmpSearchQuery] = useState('');
   
   const [cancelingEmp, setCancelingEmp] = useState<Employee | null>(null);
@@ -862,6 +924,15 @@ export default function AdminDashboard({
             ผังห้องพักเรียลไทม์
           </button>
           <button
+            onClick={() => setActiveSubTab('map')}
+            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 shrink-0 ${
+              activeSubTab === 'map' ? 'bg-white text-indigo-600 shadow-xs border border-slate-200/50' : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <ImageIcon className="w-3.5 h-3.5" />
+            แผนที่ที่พัก (Map)
+          </button>
+          <button
             onClick={() => setActiveSubTab('settings')}
             className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 shrink-0 ${
               activeSubTab === 'settings' ? 'bg-white text-indigo-600 shadow-xs border border-slate-200/50' : 'text-slate-500 hover:text-slate-800'
@@ -915,6 +986,87 @@ export default function AdminDashboard({
       )}
 
       {/* Subtab content 1: Interactive room layout */}
+      {activeSubTab === 'map' && (
+        <div className="space-y-6" id="map-view-container">
+          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest font-display mb-4">ผังรีสอร์ต (Interactive Map)</h3>
+            
+            <div className="mb-4 space-y-4">
+              <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 overflow-x-auto scrollbar-hide mb-2">
+                <button
+                  onClick={() => setEditingMapZone('main')}
+                  className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 shrink-0 ${
+                    editingMapZone === 'main' ? 'bg-white text-indigo-600 shadow-xs border border-slate-200/50' : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  โซนรีสอร์ท
+                </button>
+                <button
+                  onClick={() => setEditingMapZone('zone1')}
+                  className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 shrink-0 ${
+                    editingMapZone === 'zone1' ? 'bg-white text-indigo-600 shadow-xs border border-slate-200/50' : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  โซนโรงแรม 1
+                </button>
+                <button
+                  onClick={() => setEditingMapZone('zone2')}
+                  className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 shrink-0 ${
+                    editingMapZone === 'zone2' ? 'bg-white text-indigo-600 shadow-xs border border-slate-200/50' : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  โซนโรงแรม 2
+                </button>
+              </div>
+
+              <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4">
+                <p className="text-xs font-bold text-indigo-700 flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-amber-500" />
+                  ขณะนี้คุณกำลังตั้งค่ารูปแผนที่ของ: <span className="bg-indigo-600 text-white px-2 py-0.5 rounded-lg ml-1 font-black">{editingMapZone === 'main' ? 'โซนรีสอร์ท' : editingMapZone === 'zone1' ? 'โซนโรงแรม 1' : 'โซนโรงแรม 2'}</span>
+                </p>
+                <p className="text-[10px] text-indigo-600/70 mt-1 font-medium ml-6">เลือกโซนที่ต้องการเปลี่ยนรูปภาพได้จากแถบด้านบนครับ</p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-2">อัปโหลดรูปแผนที่ (JPG/PNG):</label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleMapUpload}
+                    className="text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"
+                    disabled={uploadingMap}
+                    key={editingMapZone}
+                  />
+                  {uploadingMap && <span className="text-xs text-indigo-600 animate-pulse">กำลังอัปโหลด...</span>}
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-2">หรือระบุ URL รูปภาพ (Direct Link):</label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="text"
+                    value={mapUrlInput}
+                    onChange={(e) => setMapUrlInput(e.target.value)}
+                    placeholder="https://..."
+                    className="text-xs w-full px-4 py-2 border rounded-full border-slate-200 focus:ring-2 focus:ring-indigo-500"
+                  />
+                  <button
+                    onClick={handleSaveMapUrl}
+                    className="px-4 py-2 bg-indigo-600 text-white rounded-full text-xs font-bold hover:bg-indigo-700"
+                  >
+                    บันทึก URL
+                  </button>
+                </div>
+              </div>
+            </div>
+            
+            <ResortMap rooms={rooms} employees={employees} onUpdateRoom={handleUpdateRoom} isAdmin={true} mapImageUrl={sheetConfig?.mapImageUrl} mapImageUrlZone1={sheetConfig?.mapImageUrlZone1} mapImageUrlZone2={sheetConfig?.mapImageUrlZone2} onActiveZoneChange={setEditingMapZone} />
+          </div>
+        </div>
+      )}
+
       {activeSubTab === 'layout' && (
         <div className="space-y-8" id="layout-view-container">
           {rooms.length === 0 ? (
@@ -1234,6 +1386,34 @@ export default function AdminDashboard({
                       >
                         <RefreshCw className="w-3.5 h-3.5" />
                         ดึงข้อมูลจากชีต
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (confirm('ต้องการเพิ่มหมุดโซนโรงแรมที่ขาดหายไปหรือไม่?')) {
+                            try {
+                              const roomsRef = collection(db, 'rooms');
+                              const hotelRooms = [
+                                { id: 'H127', roomName: 'โซนโรงแรม ห้อง 127', sequence: 17, roomType: 'Hotel Room', capacity: 2, genderRestriction: 'ไม่จำกัด', pricePerNight: 1500, floor: '1', notes: 'โซนโรงแรม 1' },
+                                { id: 'H128', roomName: 'โซนโรงแรม ห้อง 128', sequence: 18, roomType: 'Hotel Room', capacity: 2, genderRestriction: 'ไม่จำกัด', pricePerNight: 1500, floor: '1', notes: 'โซนโรงแรม 1' },
+                                { id: 'H129', roomName: 'โซนโรงแรม ห้อง 129', sequence: 19, roomType: 'Hotel Room', capacity: 2, genderRestriction: 'ไม่จำกัด', pricePerNight: 1500, floor: '1', notes: 'โซนโรงแรม 1' },
+                                { id: 'H131', roomName: 'โซนโรงแรม ห้อง 131-132', sequence: 20, roomType: 'Hotel Room', capacity: 4, genderRestriction: 'ไม่จำกัด', pricePerNight: 3000, floor: '1', notes: 'โซนโรงแรม 1 (ห้องเชื่อม)' },
+                                { id: 'H235', roomName: 'โซนโรงแรม ห้อง 235', sequence: 21, roomType: 'Hotel Room', capacity: 2, genderRestriction: 'ไม่จำกัด', pricePerNight: 1500, floor: '2', notes: 'โซนโรงแรม 2' },
+                                { id: 'H236', roomName: 'โซนโรงแรม ห้อง 236', sequence: 22, roomType: 'Hotel Room', capacity: 2, genderRestriction: 'ไม่จำกัด', pricePerNight: 1500, floor: '2', notes: 'โซนโรงแรม 2' },
+                              ];
+                              for (const hr of hotelRooms) {
+                                await setDoc(doc(roomsRef, hr.id), { ...hr, employees: [] }, { merge: true });
+                              }
+                              alert('เพิ่มหมุดโซนโรงแรมเรียบร้อยแล้ว');
+                              window.location.reload();
+                            } catch (err) {
+                              alert('เกิดข้อผิดพลาด: ' + err);
+                            }
+                          }
+                        }}
+                        className="flex-1 bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-black py-2.5 px-4 rounded-xl border border-amber-600 transition-all shadow-sm flex items-center justify-center gap-2"
+                      >
+                        <Sparkles className="w-3.5 h-3.5" />
+                        เพิ่มหมุดโซนโรงแรมที่ขาด
                       </button>
                       <button
                         onClick={onSyncToSheet}

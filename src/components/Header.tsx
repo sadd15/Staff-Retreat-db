@@ -1,6 +1,6 @@
 import React from 'react';
 import { SheetConfig } from '../types';
-import { LogOut, RefreshCw, FileSpreadsheet, ExternalLink, Shield, Users, CalendarCheck, FileText, Hotel, ArrowLeftRight, UserCheck } from 'lucide-react';
+import { LogOut, RefreshCw, FileSpreadsheet, ExternalLink, Shield, Users, CalendarCheck, FileText, Hotel, ArrowLeftRight, UserCheck, Building2 } from 'lucide-react';
 import { User } from 'firebase/auth';
 
 interface HeaderProps {

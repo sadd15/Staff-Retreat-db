@@ -6,6 +6,7 @@ import AdminDashboard from './components/AdminDashboard';
 import TripRSVP from './components/TripRSVP';
 import SummaryReport from './components/SummaryReport';
 import RoomDirectory from './components/RoomDirectory';
+import ResortMap from './components/ResortMap';
 import { initAuth, googleSignIn, getAccessToken, logout } from './lib/authService';
 import { 
   listenToEmployees, 
@@ -245,7 +246,10 @@ export default function App() {
         setSheetConfig({
           spreadsheetId: settings.spreadsheetId,
           spreadsheetName: settings.spreadsheetName || 'ฐานข้อมูลที่เชื่อมต่อ',
-          spreadsheetUrl: settings.spreadsheetUrl || `https://docs.google.com/spreadsheets/d/${settings.spreadsheetId}/edit`
+          spreadsheetUrl: settings.spreadsheetUrl || `https://docs.google.com/spreadsheets/d/${settings.spreadsheetId}/edit`,
+          mapImageUrl: settings.mapImageUrl,
+          mapImageUrlZone1: settings.mapImageUrlZone1,
+          mapImageUrlZone2: settings.mapImageUrlZone2
         });
       } else {
         setSheetConfig(null);
@@ -261,7 +265,7 @@ export default function App() {
   }, []);
 
   // Update Tab Selection with Admin check
-  const handleSetTab = (tab: 'rsvp' | 'booking' | 'admin') => {
+  const handleSetTab = (tab: 'rsvp' | 'booking' | 'directory' | 'summary' | 'admin') => {
     if (tab === 'admin' && !isAdminAuthenticated) {
       setShowPinEntry(true);
       return;
@@ -1176,6 +1180,9 @@ export default function App() {
                     selectedEmployeeId={selectedEmployeeId}
                     selectedDepartment={selectedDepartment}
                     isReadOnlyEmployee={isReadOnlyEmployee}
+                    mapImageUrl={sheetConfig?.mapImageUrl}
+                    mapImageUrlZone1={sheetConfig?.mapImageUrlZone1}
+                    mapImageUrlZone2={sheetConfig?.mapImageUrlZone2}
                   />
                 ) : activeTab === 'directory' ? (
                   <RoomDirectory

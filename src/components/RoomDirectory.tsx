@@ -283,20 +283,19 @@ export default function RoomDirectory({
                         {room.roomName && (
                           <span className="font-medium text-indigo-700 text-xs whitespace-pre-wrap leading-tight mt-0.5 mb-0.5">{room.roomName}</span>
                         )}
-                        {room.roomType !== 'Standard Twin' && (
-                          <span className="text-[9px] font-bold text-slate-400 bg-slate-50 border border-slate-100 px-1.5 py-0.5 rounded w-fit mt-0.5">{room.roomType}</span>
-                        )}
                       </div>
                     </td>
                     <td className="px-3 py-2 align-top border-r border-slate-100">
                       <div className="flex flex-col gap-0.5">
-                        <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-bold w-fit border ${
-                          room.genderRestriction === 'ชายล้วน' ? 'bg-blue-50 text-blue-600 border-blue-100' :
-                          room.genderRestriction === 'หญิงล้วน' ? 'bg-rose-50 text-rose-600 border-rose-100' :
-                          'bg-slate-50 text-slate-500 border-slate-200'
-                        }`}>
-                          {room.genderRestriction}
-                        </span>
+                        {room.genderRestriction !== 'ไม่จำกัด' && (
+                          <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-bold w-fit border ${
+                            room.genderRestriction === 'ชายล้วน' ? 'bg-blue-50 text-blue-600 border-blue-100' :
+                            room.genderRestriction === 'หญิงล้วน' ? 'bg-rose-50 text-rose-600 border-rose-100' :
+                            'bg-slate-50 text-slate-500 border-slate-200'
+                          }`}>
+                            {room.genderRestriction}
+                          </span>
+                        )}
                         <span className="text-[10px] text-slate-400 font-medium">
                           จุ {room.capacity} คน
                         </span>
@@ -369,9 +368,6 @@ export default function RoomDirectory({
                       <h4 className="font-bold text-slate-800 text-xs">ห้องที่ {room.sequence !== undefined ? room.sequence : index + 1}</h4>
                       {room.roomName && (
                         <h5 className="font-medium text-indigo-700 text-xs whitespace-pre-wrap leading-tight mt-1">{room.roomName}</h5>
-                      )}
-                      {room.roomType !== 'Standard Twin' && (
-                        <p className="text-[9px] font-bold text-slate-400 bg-slate-50 border border-slate-100 px-1.5 py-0.5 rounded w-fit mt-1.5">{room.roomType}</p>
                       )}
                     </div>
                     <span className={`px-2 py-0.5 rounded text-[9px] font-bold border shrink-0 ${

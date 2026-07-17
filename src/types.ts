@@ -20,12 +20,18 @@ export interface Room {
   notes?: string;
   sequence?: number; // Custom room sequence/order number (e.g. 1, 2, 3)
   employees?: string[];
+  mapPosition?: { x: number; y: number }; // Coordinates on resort map
+  mapPositionZone1?: { x: number; y: number };
+  mapPositionZone2?: { x: number; y: number };
 }
 
 export interface SheetConfig {
   spreadsheetId: string;
   spreadsheetName: string;
   spreadsheetUrl: string;
+  mapImageUrl?: string;
+  mapImageUrlZone1?: string;
+  mapImageUrlZone2?: string;
 }
 
 export interface BookingSummary {
