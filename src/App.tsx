@@ -33,6 +33,7 @@ import {
 import { sendAdminPinEmail } from './lib/emailService';
 import { Loader2, AlertCircle, FileSpreadsheet, Sparkles, ChevronRight, Shield, Eye, EyeOff, KeyRound, Lock, Heart, Mail, Users, Search, Building2, Check, CheckCircle2, Home, ArrowRight, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { ToastContainer, toast } from './components/Toast';
 
 export default function App() {
   // App data state subscribed from Firestore in real-time
@@ -175,9 +176,11 @@ export default function App() {
       localStorage.setItem('companytrip_verified_employee_id', selectedEmpIdInput);
       handleLoginAsEmployeeDirectly(selectedEmpIdInput, selectedDeptInput);
       setShowEmployeeVerifyModal(false);
+      toast.success('ยืนยันตัวตนและเข้าสู่ระบบสำเร็จ! ยินดีต้อนรับครับ 🎉');
     } catch (err: any) {
       console.error(err);
       setLandingError(`ไม่สามารถบันทึกการยืนยันตัวตนได้: ${err.message}`);
+      toast.error('ไม่สามารถยืนยันตัวตนได้ ❌');
     } finally {
       setSyncing(false);
     }
@@ -193,11 +196,14 @@ export default function App() {
         setActiveTab('rsvp');
         setLandingError(null);
         setAdminPinInput('');
+        toast.success('เข้าสู่ระบบแอดมินสำเร็จ! 🔐');
       } else {
         setLandingError('รหัสผ่านไม่ถูกต้อง');
+        toast.error('รหัสผ่านแอดมินไม่ถูกต้อง ❌');
       }
     } catch (err) {
       setLandingError('เกิดข้อผิดพลาดในการตรวจสอบรหัสผ่าน');
+      toast.error('ตรวจสอบรหัสผ่านล้มเหลว ❌');
     }
   };
 
@@ -214,6 +220,7 @@ export default function App() {
     setAdminPinInput('');
     setActiveTab('rsvp');
     setLandingError(null);
+    toast.info('ออกจากระบบและสลับบทบาทการใช้งานแล้ว 🚪');
   };
 
   // Set up real-time listener subscriptions on mount
@@ -243,14 +250,15 @@ export default function App() {
 
     const unsubSettings = listenToSettings((settings) => {
       setRsvpClosed(settings.rsvpClosed);
-      if (settings.spreadsheetId) {
+      if (settings.spreadsheetId || settings.mapImageUrl || settings.zones) {
         setSheetConfig({
           spreadsheetId: settings.spreadsheetId,
           spreadsheetName: settings.spreadsheetName || 'ฐานข้อมูลที่เชื่อมต่อ',
-          spreadsheetUrl: settings.spreadsheetUrl || `https://docs.google.com/spreadsheets/d/${settings.spreadsheetId}/edit`,
+          spreadsheetUrl: settings.spreadsheetUrl || (settings.spreadsheetId ? `https://docs.google.com/spreadsheets/d/${settings.spreadsheetId}/edit` : undefined),
           mapImageUrl: settings.mapImageUrl,
           mapImageUrlZone1: settings.mapImageUrlZone1,
-          mapImageUrlZone2: settings.mapImageUrlZone2
+          mapImageUrlZone2: settings.mapImageUrlZone2,
+          zones: settings.zones
         });
       } else {
         setSheetConfig(null);
@@ -282,17 +290,18 @@ export default function App() {
         setShowPinEntry(false);
         setActiveTab('admin');
         setAdminPin('');
+        toast.success('ปลดล็อคห้องควบคุมแอดมินสำเร็จ! 🔓');
       } else {
-        alert('รหัสผ่านไม่ถูกต้อง');
+        toast.error('รหัสผ่านไม่ถูกต้อง ❌');
       }
     } catch (err) {
-      alert('เกิดข้อผิดพลาดในการตรวจสอบรหัสผ่าน');
+      toast.error('เกิดข้อผิดพลาดในการตรวจสอบรหัสผ่าน ❌');
     }
   };
 
   const handleForgotPassword = async () => {
     if (!googleUser || !googleToken) {
-      alert('กรุณาลงชื่อเข้าใช้ด้วย Google ก่อนครับ เพื่อยืนยันตัวตนก่อนส่งรหัสผ่าน');
+      toast.warning('กรุณาลงชื่อเข้าใช้ด้วย Google เพื่อยืนยันตัวตนก่อนครับ 🔑');
       return;
     }
 
@@ -301,13 +310,16 @@ export default function App() {
     }
 
     setSyncing(true);
+    const toastId = toast.loading('กำลังส่งรหัสผ่านไปยังอีเมลของคุณ...', 10000);
     try {
       const pin = await getAdminPin();
       await sendAdminPinEmail(googleToken, googleUser.email, pin);
-      alert(`ส่งรหัสผ่านไปยังอีเมล ${googleUser.email} สำเร็จแล้วครับ! โปรดเช็คใน Inbox หรือ Junk mail ของคุณ`);
+      toast.dismiss(toastId);
+      toast.success(`ส่งรหัสผ่านไปยังอีเมล ${googleUser.email} สำเร็จ! โปรดเช็คใน Inbox หรือ Junk mail ของคุณ ✉️`);
     } catch (err: any) {
       console.error(err);
-      alert(`ล้มเหลวในการส่งอีเมล: ${err.message}`);
+      toast.dismiss(toastId);
+      toast.error(`ล้มเหลวในการส่งอีเมล: ${err.message}`);
     } finally {
       setSyncing(false);
     }
@@ -315,24 +327,24 @@ export default function App() {
 
   const handleChangePin = async () => {
     if (!oldPinInput || !newPinInput) {
-      alert('กรุณากรอกข้อมูลให้ครบถ้วน');
+      toast.warning('กรุณากรอกข้อมูลให้ครบถ้วน ✍️');
       return;
     }
 
     try {
       const actualPin = await getAdminPin();
       if (oldPinInput !== actualPin) {
-        alert('รหัสผ่านเดิมไม่ถูกต้อง');
+        toast.error('รหัสผ่านเดิมไม่ถูกต้อง ❌');
         return;
       }
 
       await updateAdminPin(newPinInput);
-      alert('เปลี่ยนรหัสผ่านสำเร็จแล้ว!');
+      toast.success('เปลี่ยนรหัสผ่านสำเร็จแล้ว! 🔑');
       setIsChangingPin(false);
       setOldPinInput('');
       setNewPinInput('');
     } catch (err) {
-      alert('เกิดข้อผิดพลาดในการเปลี่ยนรหัสผ่าน');
+      toast.error('เกิดข้อผิดพลาดในการเปลี่ยนรหัสผ่าน ❌');
     }
   };
 
@@ -346,8 +358,10 @@ export default function App() {
         const updatedEmployees = employees.map(e => e.id === employeeId ? { ...e, rsvpStatus: status, roomId: status === 'ไม่ไป' ? '' : e.roomId } : e);
         syncFirestoreToSheet(sheetConfig.spreadsheetId, updatedEmployees, rooms, googleToken).catch(e => console.error("Auto-sync failed", e));
       }
+      toast.success(`บันทึกคำตอบ RSVP '${status}' สำเร็จเรียบร้อยแล้ว! ✨`);
     } catch (err: any) {
       console.error(err);
+      toast.error(`ไม่สามารถบันทึกคำตอบ RSVP ได้: ${err.message}`);
       throw new Error(`ไม่สามารถบันทึกคำตอบ RSVP ได้: ${err.message}`);
     } finally {
       setSyncing(false);
@@ -359,9 +373,10 @@ export default function App() {
     setSyncing(true);
     try {
       await updateSettings(closed);
+      toast.success(closed ? 'ปิดรับการตอบรับ RSVP และการจองห้องพักแล้ว 🔒' : 'เปิดรับการตอบรับ RSVP และการจองห้องพักแล้ว 🔓');
     } catch (err: any) {
       console.error(err);
-      alert(`ไม่สามารถสลับสถานะการปิดรับลงทะเบียนได้: ${err.message}`);
+      toast.error(`ไม่สามารถสลับสถานะได้: ${err.message}`);
     } finally {
       setSyncing(false);
     }
@@ -394,8 +409,10 @@ export default function App() {
         const updatedEmployees = employees.map(e => allIds.includes(e.id) ? { ...e, roomId, rsvpStatus: 'ไป' as const } : e);
         syncFirestoreToSheet(sheetConfig.spreadsheetId, updatedEmployees, rooms, googleToken).catch(e => console.error("Auto-sync failed", e));
       }
+      toast.success('บันทึกการจองห้องพักสำเร็จเรียบร้อยแล้ว! 🏠✨');
     } catch (err: any) {
       console.error(err);
+      toast.error(err.message || 'ไม่สามารถบันทึกการจองได้');
       throw new Error(`ไม่สามารถบันทึกการจองได้: ${err.message}`);
     } finally {
       setSyncing(false);
@@ -414,8 +431,10 @@ export default function App() {
         const updatedEmployees = employees.map(e => e.id === employeeId ? { ...e, roomId: '' } : e);
         syncFirestoreToSheet(sheetConfig.spreadsheetId, updatedEmployees, rooms, googleToken).catch(e => console.error("Auto-sync failed", e));
       }
+      toast.success('ล้างรายการจองห้องพักเรียบร้อยแล้ว! 🗑️');
     } catch (err: any) {
       console.error(err);
+      toast.error(`ไม่สามารถล้างสถานะได้: ${err.message}`);
       throw new Error(`ไม่สามารถล้างสถานะได้: ${err.message}`);
     } finally {
       setSyncing(false);
@@ -496,10 +515,14 @@ export default function App() {
   // Seed default dataset on a fresh instance
   const handleLoadDemoDataset = async () => {
     setSyncing(true);
+    const toastId = toast.loading('กำลังนำเข้าข้อมูลตัวอย่าง...', 10000);
     try {
       await seedDemoDataToFirestore();
+      toast.dismiss(toastId);
+      toast.success('นำเข้าข้อมูลตัวอย่างเรียบร้อยแล้ว! 🚀 พร้อมเริ่มจองห้องพักทันที');
     } catch (err: any) {
-      alert(`ไม่สามารถนำเข้าข้อมูลตัวอย่างได้: ${err.message}`);
+      toast.dismiss(toastId);
+      toast.error(`ไม่สามารถนำเข้าข้อมูลตัวอย่างได้: ${err.message}`);
     } finally {
       setSyncing(false);
     }
@@ -510,6 +533,7 @@ export default function App() {
     if (!sheetLinkOrId.trim()) return;
     setSyncing(true);
     setDataError(null);
+    const toastId = toast.loading('กำลังดึงข้อมูลและซิงค์กับ Google Sheet...', 15000);
     try {
       // Extract Google Sheet ID from URL if necessary
       let sheetId = sheetLinkOrId.trim();
@@ -520,10 +544,12 @@ export default function App() {
 
       await syncSheetToFirestore(sheetId);
       setSheetInput('');
-      alert('ดึงข้อมูลและซิงค์กับ Google Sheet สำเร็จเรียบร้อยแล้ว!');
+      toast.dismiss(toastId);
+      toast.success('ดึงข้อมูลและซิงค์กับ Google Sheet สำเร็จเรียบร้อยแล้ว! 📊');
     } catch (err: any) {
       console.error(err);
-      alert(`ดึงข้อมูลล้มเหลว: ${err.message || 'โปรดตรวจสอบสิทธิ์การแชร์ (ต้องตั้งเป็น ทุกคนที่มีลิงก์อ่านได้) และชื่อแท็บ Employees, Rooms'}`);
+      toast.dismiss(toastId);
+      toast.error(`ดึงข้อมูลล้มเหลว: ${err.message || 'โปรดตรวจสอบสิทธิ์การแชร์ และชื่อแท็บ'}`);
     } finally {
       setSyncing(false);
     }
@@ -534,6 +560,7 @@ export default function App() {
     if (!sheetLinkOrId.trim()) return;
     setSyncing(true);
     setDataError(null);
+    const toastId = toast.loading('กำลังล้างฐานข้อมูลและซิงค์รายชื่อพนักงานใหม่...', 15000);
     try {
       let sheetId = sheetLinkOrId.trim();
       const match = sheetId.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
@@ -543,10 +570,12 @@ export default function App() {
 
       await cleanSyncSheetToFirestore(sheetId);
       setSheetInput('');
-      alert('ล้างฐานข้อมูลพนักงานเดิมและซิงค์รายชื่อพนักงานใหม่จาก Google Sheet เรียบร้อยแล้ว!');
+      toast.dismiss(toastId);
+      toast.success('ล้างฐานข้อมูลเดิมและซิงค์รายชื่อใหม่จาก Google Sheet เรียบร้อยแล้ว! 📊');
     } catch (err: any) {
       console.error(err);
-      alert(`ดึงข้อมูลล้มเหลว: ${err.message || 'โปรดตรวจสอบสิทธิ์การแชร์ (ต้องตั้งเป็น ทุกคนที่มีลิงก์อ่านได้) และชื่อแท็บ Employees'}`);
+      toast.dismiss(toastId);
+      toast.error(`ดึงข้อมูลล้มเหลว: ${err.message || 'โปรดตรวจสอบสิทธิ์การแชร์ และชื่อแท็บ'}`);
     } finally {
       setSyncing(false);
     }
@@ -560,7 +589,7 @@ export default function App() {
 
   const handleSyncToSheet = async () => {
     if (!sheetConfig?.spreadsheetId) {
-      alert("โปรดเชื่อมต่อสเปรดชีตก่อนครับ");
+      toast.warning('โปรดเชื่อมต่อสเปรดชีตก่อนครับ 📊');
       return;
     }
 
@@ -574,18 +603,21 @@ export default function App() {
         setGoogleUser(result.user);
         setGoogleToken(token);
       } catch (err: any) {
-        alert(`เข้าสู่ระบบ Google ล้มเหลว: ${err.message}`);
+        toast.error(`เข้าสู่ระบบ Google ล้มเหลว: ${err.message}`);
         return;
       }
     }
 
     setSyncing(true);
+    const toastId = toast.loading('กำลังซิงค์ข้อมูลกลับไปยัง Google Sheet...', 15000);
     try {
       await syncFirestoreToSheet(sheetConfig.spreadsheetId, employees, rooms, token);
-      alert("ซิงค์ข้อมูลกลับไปยัง Google Sheet สำเร็จเรียบร้อยแล้ว!");
+      toast.dismiss(toastId);
+      toast.success('ซิงค์ข้อมูลกลับไปยัง Google Sheet สำเร็จเรียบร้อยแล้ว! ☁️📊');
     } catch (error: any) {
       console.error(error);
-      alert(`ซิงค์ข้อมูลล้มเหลว: ${error.message || "โปรดตรวจสอบว่าคุณได้กดยอมรับสิทธิ์การเข้าถึง Google Sheets แล้ว"}`);
+      toast.dismiss(toastId);
+      toast.error(`ซิงค์ข้อมูลล้มเหลว: ${error.message || 'โปรดตรวจสอบการเข้าถึง Google Sheets'}`);
     } finally {
       setSyncing(false);
     }
@@ -1469,6 +1501,7 @@ export default function App() {
           </motion.div>
         </div>
       )}
+      <ToastContainer />
     </div>
   );
 }

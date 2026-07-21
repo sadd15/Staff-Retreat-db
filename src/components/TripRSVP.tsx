@@ -60,37 +60,62 @@ export default function TripRSVP({
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [empToEdit, setEmpToEdit] = useState<Employee | null>(null);
+  const [deleteConfirmEmp, setDeleteConfirmEmp] = useState<Employee | null>(null);
+  const [rsvpCancelConfirm, setRsvpCancelConfirm] = useState<{ employeeId: string; status: 'ไป' | 'ไม่ไป' | 'ยังไม่ระบุ'; empName: string } | null>(null);
   
   const [formName, setFormName] = useState('');
   const [formGender, setFormGender] = useState<'ชาย' | 'หญิง'>('ชาย');
   const [formDept, setFormDept] = useState('');
+  const [formId, setFormId] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
-  // Helper to generate the next Employee ID sequentially per department
-  const getNextEmpIdForDept = (deptName: string) => {
-    const deptEmployees = employees.filter(e => e.department === deptName);
-    const numericIds = deptEmployees
+  // Helper to generate the next Employee ID sequentially globally (EMPxxx format)
+  const getNextEmpId = () => {
+    const empEmployees = employees.filter(e => {
+      // Find all IDs that are formatted like EMPxxx or are numbers, or just extract any numeric parts
+      return e.id.toUpperCase().startsWith('EMP');
+    });
+    
+    const numericIds = empEmployees
       .map(e => {
-        const match = e.id.match(/\d+/g);
-        if (match) {
-          const lastNum = parseInt(match[match.length - 1], 10);
-          return isNaN(lastNum) ? 0 : lastNum;
-        }
-        return 0;
+        const numStr = e.id.substring(3);
+        const num = parseInt(numStr, 10);
+        return isNaN(num) ? 0 : num;
       })
       .filter(num => num > 0);
-    const maxId = numericIds.length > 0 ? Math.max(...numericIds) : 0;
-    return `${deptName}-${maxId + 1}`;
+
+    // If there are general numbers in any other IDs, let's also scan them to avoid any duplication
+    const allNumericIds = employees
+      .map(e => {
+        const match = e.id.match(/\d+/);
+        return match ? parseInt(match[0], 10) : 0;
+      })
+      .filter(num => num > 0);
+
+    const maxNum = Math.max(
+      numericIds.length > 0 ? Math.max(...numericIds) : 0,
+      allNumericIds.length > 0 ? Math.max(...allNumericIds) : 0
+    );
+
+    const nextNum = maxNum > 0 ? maxNum + 1 : 1;
+    return `EMP${String(nextNum).padStart(3, '0')}`;
   };
 
   const handleAddEmployee = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formName.trim() || !formDept.trim()) return;
+    if (!formName.trim() || !formDept.trim() || !formId.trim()) return;
+
+    // Check duplicate ID
+    const idExists = employees.some(emp => emp.id.toUpperCase() === formId.trim().toUpperCase());
+    if (idExists) {
+      alert(`รหัสพนักงาน "${formId.trim()}" นี้มีอยู่ในระบบแล้ว กรุณาใช้รหัสอื่น`);
+      return;
+    }
 
     setIsSaving(true);
     try {
       const newEmp: Employee = {
-        id: getNextEmpIdForDept(formDept.trim()),
+        id: formId.trim(),
         name: formName.trim(),
         gender: formGender,
         department: formDept.trim(),
@@ -102,6 +127,7 @@ export default function TripRSVP({
       setIsAddModalOpen(false);
       setFormName('');
       setFormDept('');
+      setFormId('');
       alert('เพิ่มพนักงานคนใหม่เรียบร้อยแล้ว');
     } catch (err: any) {
       alert(`ล้มเหลว: ${err.message}`);
@@ -122,6 +148,7 @@ export default function TripRSVP({
     setFormName('');
     setFormGender('ชาย');
     setFormDept(deptName);
+    setFormId(getNextEmpId());
     setIsAddModalOpen(true);
   };
 
@@ -159,16 +186,22 @@ export default function TripRSVP({
     }
   };
 
-  const handleDeleteEmployee = async (emp: Employee) => {
-    const confirmed = window.confirm(`คุณต้องการลบรายชื่อคุณ ${emp.name} ออกจากระบบถาวรใช่หรือไม่? หากลบไปแล้ว ประวัติการจองและตำแหน่งจะสูญหายทันที`);
-    if (!confirmed) return;
+  const handleDeleteEmployee = (emp: Employee) => {
+    setDeleteConfirmEmp(emp);
+  };
 
+  const handleConfirmDeleteEmployee = async () => {
+    if (!deleteConfirmEmp) return;
+    setIsSaving(true);
     try {
-      const updatedEmployees = employees.filter(e => e.id !== emp.id);
+      const updatedEmployees = employees.filter(e => e.id !== deleteConfirmEmp.id);
       await onUpdateEmployees(updatedEmployees);
+      setDeleteConfirmEmp(null);
       alert('ลบรายชื่อพนักงานสำเร็จเรียบร้อยแล้ว');
     } catch (err: any) {
       alert(`ล้มเหลว: ${err.message}`);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -251,11 +284,29 @@ export default function TripRSVP({
     
     const emp = employees.find(e => e.id === employeeId);
     if (emp && emp.roomId && (status === 'ไม่ไป' || status === 'ยังไม่ระบุ')) {
-      const confirmed = window.confirm(`คุณ ${emp.name} ทำการเข้ากลุ่มพัก ไว้แล้ว การเปลี่ยนสถานะเป็น "${status === 'ไม่ไป' ? 'ไม่ไป' : 'ยังไม่ระบุ'}" จะยกเลิกการจองห้องพักโดยอัตโนมัติ คุณต้องการดำเนินการต่อหรือไม่?`);
-      if (!confirmed) return;
+      setRsvpCancelConfirm({
+        employeeId,
+        status,
+        empName: emp.name
+      });
+      return;
     }
 
     setSubmittingId(employeeId);
+    try {
+      await onUpdateRSVP(employeeId, status);
+    } catch (err: any) {
+      alert(err.message || 'เกิดข้อผิดพลาดในการบันทึกข้อมูล');
+    } finally {
+      setSubmittingId(null);
+    }
+  };
+
+  const handleConfirmRsvpCancel = async () => {
+    if (!rsvpCancelConfirm) return;
+    const { employeeId, status } = rsvpCancelConfirm;
+    setSubmittingId(employeeId);
+    setRsvpCancelConfirm(null);
     try {
       await onUpdateRSVP(employeeId, status);
     } catch (err: any) {
@@ -569,7 +620,7 @@ export default function TripRSVP({
                           <th className="px-4 py-2.5">ฝ่าย</th>
                           <th className="px-4 py-2.5">เพศ</th>
                           <th className="px-4 py-2.5 text-center">สถานะเข้าร่วม / คลิกแก้ไข</th>
-                          {!rsvpClosed && <th className="px-4 py-2.5 text-center">จัดการ</th>}
+                          {(!rsvpClosed || userRole === 'admin') && <th className="px-4 py-2.5 text-center">จัดการ</th>}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
@@ -665,9 +716,9 @@ export default function TripRSVP({
                                   </div>
                                 )}
                               </td>
-                              {!rsvpClosed && (
+                              {(!rsvpClosed || userRole === 'admin') && (
                                 <td className="px-4 py-3.5 text-center whitespace-nowrap">
-                                  {(!isReadOnlyEmployee && (userRole === 'admin' || (userRole === 'employee' && selectedDepartment === emp.department))) ? (
+                                  {(userRole === 'admin' || (!isReadOnlyEmployee && !rsvpClosed && userRole === 'employee' && selectedDepartment === emp.department)) ? (
                                     <div className="flex items-center justify-center gap-1.5">
                                       <button
                                         type="button"
@@ -694,7 +745,7 @@ export default function TripRSVP({
                             </tr>
                           );
                         })}
-                        {!rsvpClosed && hasDeptPermission && (
+                        {(!rsvpClosed || userRole === 'admin') && hasDeptPermission && (
                           <tr className="bg-slate-50/20 hover:bg-indigo-50/10 transition-colors">
                             <td colSpan={6} className="px-4 py-3 text-center">
                               <button
@@ -733,7 +784,7 @@ export default function TripRSVP({
                                   </div>
                                 )}
                               </div>
-                              {!rsvpClosed && canEdit && (
+                              {(!rsvpClosed || userRole === 'admin') && (userRole === 'admin' || (!isReadOnlyEmployee && !rsvpClosed && userRole === 'employee' && selectedDepartment === emp.department)) && (
                                 <div className="flex items-center gap-1">
                                   <button
                                     onClick={() => handleOpenEditModal(emp)}
@@ -810,7 +861,7 @@ export default function TripRSVP({
                         );
                       })}
                     </div>
-                    {!rsvpClosed && (
+                    {(!rsvpClosed || userRole === 'admin') && (
                       <div className="p-4 bg-slate-50/50">
                           <button
                             onClick={() => handleOpenAddModalForDept(deptName)}
@@ -847,6 +898,18 @@ export default function TripRSVP({
             </div>
 
             <form onSubmit={handleAddEmployee} className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 tracking-wider font-display">รหัสพนักงาน (กรอกเองหรือใช้รหัสแนะนำ)</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="เช่น EMP074 หรือ ข้าราชการ-10"
+                  value={formId}
+                  onChange={(e) => setFormId(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all font-mono font-bold text-indigo-700"
+                />
+              </div>
+
               <div>
                 <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 tracking-wider font-display">ชื่อ - นามสกุล</label>
                 <input
@@ -886,7 +949,12 @@ export default function TripRSVP({
                   required
                   placeholder="เช่น การตลาด, ไอที, บัญชี, หรือ ฝ่ายบุคคล"
                   value={formDept}
-                  onChange={(e) => setFormDept(e.target.value)}
+                  onChange={(e) => {
+                    const newDept = e.target.value;
+                    setFormDept(newDept);
+                    // Keep the recommended EMPxxx sequential ID
+                    setFormId(getNextEmpId());
+                  }}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all font-medium text-slate-700"
                   list="departments-list"
                 />
@@ -1015,6 +1083,87 @@ export default function TripRSVP({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Delete Confirmation Modal */}
+      {deleteConfirmEmp && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-xl max-w-sm w-full p-6 space-y-4 animate-in zoom-in-95 duration-200 text-center">
+            <div className="mx-auto w-12 h-12 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center">
+              <Trash2 className="w-6 h-6 animate-pulse" />
+            </div>
+            <div className="space-y-1.5">
+              <h3 className="font-display font-black text-slate-800 text-sm">ยืนยันการลบรายชื่อพนักงาน</h3>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                คุณต้องการลบคุณ <span className="font-bold text-rose-600">{deleteConfirmEmp.name}</span> ออกจากระบบถาวรใช่หรือไม่?
+              </p>
+              <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-[10px] text-slate-400 font-mono text-left space-y-1">
+                <div>รหัสพนักงาน: <span className="font-bold text-slate-600">{deleteConfirmEmp.id}</span></div>
+                <div>ฝ่าย: <span className="font-bold text-slate-600">{deleteConfirmEmp.department}</span></div>
+                {deleteConfirmEmp.roomId && <div className="text-amber-600 font-bold">⚠️ หากลบไปแล้ว ตำแหน่งการจองห้องพัก ({deleteConfirmEmp.roomId}) จะหลุดออกทันที</div>}
+              </div>
+            </div>
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmEmp(null)}
+                className="flex-1 py-2 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-50 transition-all"
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="button"
+                disabled={isSaving}
+                onClick={handleConfirmDeleteEmployee}
+                className="flex-1 py-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold hover:shadow-xs transition-all flex items-center justify-center gap-1.5"
+              >
+                {isSaving ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Trash2 className="w-3.5 h-3.5" />
+                )}
+                <span>{isSaving ? 'กำลังลบ...' : 'ยืนยันลบ'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom RSVP Cancel Confirmation Modal */}
+      {rsvpCancelConfirm && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-xl max-w-sm w-full p-6 space-y-4 animate-in zoom-in-95 duration-200 text-center">
+            <div className="mx-auto w-12 h-12 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center">
+              <AlertCircle className="w-6 h-6 animate-bounce" />
+            </div>
+            <div className="space-y-1.5">
+              <h3 className="font-display font-black text-slate-800 text-sm">การเปลี่ยนสถานะจะล้างการจอง</h3>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                คุณ <span className="font-bold text-slate-700">{rsvpCancelConfirm.empName}</span> ได้ทำการเข้ากลุ่มจองห้องพักไว้แล้ว
+              </p>
+              <p className="text-xs text-amber-600 font-bold bg-amber-50 p-2.5 rounded-xl border border-amber-100">
+                ⚠️ การเปลี่ยนสถานะเป็น "{rsvpCancelConfirm.status === 'ไม่ไป' ? 'ไม่ไป' : 'ยังไม่ระบุ'}" จะทำการยกเลิกสิทธิ์และลบรายชื่อออกจากกลุ่มห้องพักโดยอัตโนมัติ!
+              </p>
+            </div>
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setRsvpCancelConfirm(null)}
+                className="flex-1 py-2 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-50 transition-all"
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmRsvpCancel}
+                className="flex-1 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold hover:shadow-xs transition-all flex items-center justify-center gap-1.5"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>ดำเนินการต่อ</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

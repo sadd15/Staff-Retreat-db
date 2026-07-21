@@ -9,6 +9,12 @@ export interface Employee {
   verified?: boolean;
 }
 
+export interface MapZone {
+  id: string;
+  name: string;
+  imageUrl?: string;
+}
+
 export interface Room {
   id: string; // Used as unique ID
   roomName?: string; // Customizable room name (e.g., "บ้านริมธาร 881")
@@ -20,9 +26,10 @@ export interface Room {
   notes?: string;
   sequence?: number; // Custom room sequence/order number (e.g. 1, 2, 3)
   employees?: string[];
-  mapPosition?: { x: number; y: number }; // Coordinates on resort map
+  mapPosition?: { x: number; y: number }; // Coordinates on resort map (backward compatibility)
   mapPositionZone1?: { x: number; y: number };
   mapPositionZone2?: { x: number; y: number };
+  zonePositions?: Record<string, { x: number; y: number }>; // Dynamic coordinates per zone ID
 }
 
 export interface SheetConfig {
@@ -32,6 +39,7 @@ export interface SheetConfig {
   mapImageUrl?: string;
   mapImageUrlZone1?: string;
   mapImageUrlZone2?: string;
+  zones?: MapZone[];
 }
 
 export interface BookingSummary {

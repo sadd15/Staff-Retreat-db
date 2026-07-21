@@ -17,7 +17,7 @@ import {
 } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import firebaseConfig from '../../firebase-applet-config.json';
-import { Employee, Room, SheetConfig } from '../types';
+import { Employee, Room, SheetConfig, MapZone } from '../types';
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
@@ -386,6 +386,7 @@ export function listenToRooms(callback: (rooms: Room[]) => void) {
         mapPosition: d.mapPosition,
         mapPositionZone1: d.mapPositionZone1,
         mapPositionZone2: d.mapPositionZone2,
+        zonePositions: d.zonePositions || {},
       });
     });
     callback(rms);
@@ -397,7 +398,7 @@ export function listenToRooms(callback: (rooms: Room[]) => void) {
 /**
  * Set up real-time listener for Settings
  */
-export function listenToSettings(callback: (settings: { rsvpClosed: boolean; spreadsheetId?: string; spreadsheetName?: string; spreadsheetUrl?: string; mapImageUrl?: string; mapImageUrlZone1?: string; mapImageUrlZone2?: string }) => void) {
+export function listenToSettings(callback: (settings: { rsvpClosed: boolean; spreadsheetId?: string; spreadsheetName?: string; spreadsheetUrl?: string; mapImageUrl?: string; mapImageUrlZone1?: string; mapImageUrlZone2?: string; zones?: MapZone[] }) => void) {
   const path = 'settings';
   return onSnapshot(doc(db, 'settings', 'config'), (docSnap) => {
     if (docSnap.exists()) {
@@ -409,7 +410,8 @@ export function listenToSettings(callback: (settings: { rsvpClosed: boolean; spr
         spreadsheetUrl: d.spreadsheetUrl,
         mapImageUrl: d.mapImageUrl,
         mapImageUrlZone1: d.mapImageUrlZone1,
-        mapImageUrlZone2: d.mapImageUrlZone2
+        mapImageUrlZone2: d.mapImageUrlZone2,
+        zones: d.zones || []
       });
     } else {
       callback({ rsvpClosed: false });
@@ -533,11 +535,32 @@ export async function updateAdminPin(newPin: string): Promise<void> {
 }
 
 /**
+ * Update dynamic zones in settings
+ */
+export async function updateZonesInFirestore(zones: MapZone[]): Promise<void> {
+  const settingsRef = doc(db, 'settings', 'config');
+  await setDoc(settingsRef, { zones }, { merge: true });
+}
+
+/**
  * Update Map Image URL in settings
  */
-export async function updateMapImageUrlInFirestore(url: string, field: 'mapImageUrl' | 'mapImageUrlZone1' | 'mapImageUrlZone2' = 'mapImageUrl'): Promise<void> {
+export async function updateMapImageUrlInFirestore(url: string, field: string = 'mapImageUrl', zoneId?: string): Promise<void> {
   const settingsRef = doc(db, 'settings', 'config');
-  await setDoc(settingsRef, { [field]: url }, { merge: true });
+  
+  if (zoneId) {
+    // Update imageUrl within the zones array
+    await runTransaction(db, async (transaction) => {
+      const snap = await transaction.get(settingsRef);
+      if (!snap.exists()) return;
+      const data = snap.data();
+      const zones: MapZone[] = data.zones || [];
+      const updatedZones = zones.map(z => z.id === zoneId ? { ...z, imageUrl: url } : z);
+      transaction.update(settingsRef, { zones: updatedZones });
+    });
+  } else {
+    await setDoc(settingsRef, { [field]: url }, { merge: true });
+  }
 }
 
 /**
@@ -683,6 +706,7 @@ export async function updateEmployeesInFirestore(updatedEmployees: Employee[]): 
   try {
     const querySnapshot = await getDocs(collection(db, 'employees'));
     const newIds = new Set(updatedEmployees.map(emp => emp.id));
+    const deletedIds: string[] = [];
 
     const batch = writeBatch(db);
 
@@ -690,6 +714,7 @@ export async function updateEmployeesInFirestore(updatedEmployees: Employee[]): 
     querySnapshot.forEach(docSnap => {
       if (!newIds.has(docSnap.id)) {
         batch.delete(docSnap.ref);
+        deletedIds.push(docSnap.id);
       }
     });
 
@@ -698,6 +723,22 @@ export async function updateEmployeesInFirestore(updatedEmployees: Employee[]): 
       const ref = doc(db, 'employees', emp.id);
       batch.set(ref, sanitizeData(emp));
     });
+
+    // If any employees were deleted, clean up their bookings from rooms!
+    if (deletedIds.length > 0) {
+      const roomsSnapshot = await getDocs(collection(db, 'rooms'));
+      roomsSnapshot.forEach(roomSnap => {
+        const roomData = roomSnap.data();
+        const roomEmpIds: string[] = roomData.employees || [];
+        const updatedRoomEmpIds = roomEmpIds.filter(id => !deletedIds.includes(id));
+        if (updatedRoomEmpIds.length !== roomEmpIds.length) {
+          batch.update(roomSnap.ref, {
+            employees: updatedRoomEmpIds,
+            updatedAt: serverTimestamp()
+          });
+        }
+      });
+    }
 
     await batch.commit();
   } catch (error) {
@@ -777,12 +818,28 @@ export async function wipeAllEmployeesInFirestore(): Promise<void> {
 /**
  * Update a single room's map position in Firestore
  */
-export async function updateRoomPositionInFirestore(roomId: string, position?: { x: number; y: number }, positionZone1?: { x: number; y: number }, positionZone2?: { x: number; y: number }): Promise<void> {
+export async function updateRoomPositionInFirestore(
+  roomId: string, 
+  position?: { x: number; y: number } | null, 
+  positionZone1?: { x: number; y: number } | null, 
+  positionZone2?: { x: number; y: number } | null, 
+  zoneId?: string, 
+  zonePosition?: { x: number; y: number } | null,
+  zonePositions?: Record<string, { x: number; y: number } | null>
+): Promise<void> {
   const roomRef = doc(db, 'rooms', roomId);
   const updateData: any = {};
   if (position !== undefined) updateData.mapPosition = position;
   if (positionZone1 !== undefined) updateData.mapPositionZone1 = positionZone1;
   if (positionZone2 !== undefined) updateData.mapPositionZone2 = positionZone2;
+  
+  if (zoneId) {
+    updateData[`zonePositions.${zoneId}`] = zonePosition !== undefined ? zonePosition : null;
+  }
+  if (zonePositions !== undefined) {
+    updateData.zonePositions = zonePositions;
+  }
+
   if (Object.keys(updateData).length > 0) {
     await updateDoc(roomRef, updateData);
   }

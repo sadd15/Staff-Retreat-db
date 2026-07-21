@@ -202,7 +202,7 @@ export default function RoomDirectory({
               ทำเนียบห้องพัก (Room Directory)
             </h1>
             <p className="text-slate-500 text-xs mt-1 leading-relaxed">
-              ตรวจสอบรายชื่อผู้เข้าพักในแต่ละห้อง และจัดการยกเลิกการจอง
+              ตรวจสอบรายชื่อผู้เข้าพักในแต่ละห้องได้อย่างง่ายดายและเป็นระเบียบ
             </p>
           </div>
         </div>
@@ -263,7 +263,7 @@ export default function RoomDirectory({
             <thead>
               <tr className="bg-indigo-50 text-indigo-800 font-bold border-b border-indigo-100">
                 <th className="px-3 py-2 border-r border-indigo-100 w-[160px]">ห้องพัก</th>
-                <th className="px-3 py-2 border-r border-indigo-100 w-[140px]">ประเภท / เงื่อนไข</th>
+                <th className="px-3 py-2 border-r border-indigo-100 w-[200px]">ประเภท / เงื่อนไข</th>
                 <th className="px-3 py-2 border-r border-indigo-100">รายชื่อผู้เข้าพัก</th>
                 <th className="px-3 py-2 text-center whitespace-nowrap w-[120px]">สถานะ</th>
               </tr>
@@ -286,45 +286,44 @@ export default function RoomDirectory({
                       </div>
                     </td>
                     <td className="px-3 py-2 align-top border-r border-slate-100">
-                      <div className="flex flex-col gap-0.5">
-                        {room.genderRestriction !== 'ไม่จำกัด' && (
-                          <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-bold w-fit border ${
-                            room.genderRestriction === 'ชายล้วน' ? 'bg-blue-50 text-blue-600 border-blue-100' :
-                            room.genderRestriction === 'หญิงล้วน' ? 'bg-rose-50 text-rose-600 border-rose-100' :
-                            'bg-slate-50 text-slate-500 border-slate-200'
-                          }`}>
-                            {room.genderRestriction}
+                      <div className="flex flex-col gap-1 min-w-[160px]">
+                        <div className="flex flex-wrap items-center gap-1">
+                          <span className="text-[10px] text-slate-500 font-bold bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                            จุ {room.capacity} คน
                           </span>
+                          {room.genderRestriction !== 'ไม่จำกัด' && (
+                            <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-bold border ${
+                              room.genderRestriction === 'ชายล้วน' ? 'bg-blue-50 text-blue-600 border-blue-100' :
+                              room.genderRestriction === 'หญิงล้วน' ? 'bg-rose-50 text-rose-600 border-rose-100' :
+                              'bg-slate-50 text-slate-500 border-slate-200'
+                            }`}>
+                              {room.genderRestriction}
+                            </span>
+                          )}
+                        </div>
+                        {room.notes && room.notes.trim() && (
+                          <div className="text-[10px] text-indigo-900 bg-indigo-50/50 border border-indigo-100 px-1.5 py-1 rounded-lg font-medium mt-1 whitespace-pre-wrap leading-tight">
+                            <span className="font-extrabold text-[9px] text-indigo-700 block mb-0.5 uppercase tracking-wider">เงื่อนไข/หมายเหตุ:</span>
+                            {room.notes}
+                          </div>
                         )}
-                        <span className="text-[10px] text-slate-400 font-medium">
-                          จุ {room.capacity} คน
-                        </span>
                       </div>
                     </td>
-                    <td className="px-3 py-2 align-top border-r border-slate-100">
+                    <td className="px-4 py-2.5 align-top border-r border-slate-100">
                       {isEmpty ? (
-                        <div className="text-slate-300 py-1 font-medium text-[11px]">ยังไม่มีการจอง</div>
+                        <div className="text-slate-300 py-1 font-medium text-xs italic">ยังไม่มีการจอง</div>
                       ) : (
-                        <div className="flex flex-wrap gap-x-3 gap-y-1">
+                        <div className="flex flex-col gap-1.5 py-0.5">
                           {occupants.map(o => (
                             <div
                               key={o.id}
-                              className="flex items-center gap-1.5 group/item"
+                              className="text-slate-700 text-xs flex items-center gap-2 py-0.5"
                             >
-                              <div className={`w-1.5 h-1.5 rounded-full ${
+                              <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${
                                 o.gender === 'หญิง' ? 'bg-rose-400' : 'bg-blue-400'
                               }`} />
-                              <span className="font-bold text-slate-700 text-[11px]">{o.name}</span>
-                              <span className="text-[9px] text-slate-400">({o.department})</span>
-                              {!isReadOnlyEmployee && (userRole === 'admin' || (userRole === 'employee' && selectedEmployeeId === o.id)) && (
-                                <button
-                                  onClick={() => setCancelingEmp(o)}
-                                  className="hide-in-export text-slate-300 hover:text-rose-500 transition-all p-0.5"
-                                  title="ยกเลิกการจอง"
-                                >
-                                  <X className="w-3 h-3" />
-                                </button>
-                              )}
+                              <span className="font-extrabold text-slate-800 text-[13px] tracking-tight">{o.name}</span>
+                              <span className="text-slate-400 font-medium text-xs">({o.department})</span>
                             </div>
                           ))}
                         </div>
@@ -379,18 +378,33 @@ export default function RoomDirectory({
                     </span>
                   </div>
 
+                  {room.notes && room.notes.trim() && (
+                    <div className="text-[10px] text-indigo-900 bg-indigo-50/50 border border-indigo-100 px-2.5 py-1.5 rounded-xl font-medium leading-normal whitespace-pre-wrap break-words">
+                      <span className="font-bold text-indigo-700">📌 เงื่อนไข/หมายเหตุ:</span> {room.notes}
+                    </div>
+                  )}
+
                   <div className="space-y-1.5">
                     {occupants.map(o => (
-                      <div key={o.id} className="flex items-center justify-between bg-slate-50/50 p-2 rounded-lg border border-slate-100">
+                      <div
+                        key={o.id}
+                        className={`flex items-center justify-between px-3 py-1.5 rounded-xl border transition-all ${
+                          o.gender === 'หญิง'
+                            ? 'bg-rose-50/30 text-rose-900 border-rose-100/50'
+                            : 'bg-blue-50/30 text-blue-900 border-blue-100/50'
+                        }`}
+                      >
                         <div className="flex items-center gap-2">
                           <div className={`w-1.5 h-1.5 rounded-full ${o.gender === 'หญิง' ? 'bg-rose-400' : 'bg-blue-400'}`} />
-                          <p className="text-[11px] font-bold text-slate-700">{o.name} <span className="text-[9px] text-slate-400">({o.department})</span></p>
+                          <p className="text-[11px] font-extrabold">
+                            {o.name}
+                          </p>
                         </div>
-                        {!isReadOnlyEmployee && (userRole === 'admin' || (userRole === 'employee' && selectedEmployeeId === o.id)) && (
-                          <button onClick={() => setCancelingEmp(o)} className="p-1 text-slate-300 hover:text-rose-500 transition-colors">
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        )}
+                        <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded-lg ${
+                          o.gender === 'หญิง' ? 'bg-rose-100/40 text-rose-700' : 'bg-blue-100/40 text-blue-700'
+                        }`}>
+                          {o.department}
+                        </span>
                       </div>
                     ))}
                     {isEmpty && <p className="text-[10px] text-slate-300 italic py-1">ยังไม่มีการจอง</p>}
