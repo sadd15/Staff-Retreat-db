@@ -327,35 +327,35 @@ export default function TripRSVP({
   }, [employees]);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6 font-sans space-y-8" id="rsvp-page-container">
+    <div className="max-w-7xl mx-auto px-4 py-3 font-sans space-y-4" id="rsvp-page-container">
       
       {/* RSVP Welcoming Header Card */}
-      <div className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center md:justify-between gap-4" id="rsvp-welcome-header">
+      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center md:justify-between gap-3" id="rsvp-welcome-header">
         <div>
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-50 text-indigo-600 text-[10px] font-bold border border-indigo-100 uppercase tracking-wider mb-2 font-display">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-50 text-indigo-600 text-[10px] font-bold border border-indigo-100 uppercase tracking-wider mb-1.5 font-display">
             ทำเนียบรายชื่อพนักงาน (Employee Directory)
           </span>
-          <h1 className="text-xl sm:text-2xl font-display font-extrabold text-slate-800 leading-tight">
+          <h1 className="text-lg sm:text-xl font-display font-extrabold text-slate-800 leading-tight">
             ระบบเช็คชื่อและจัดการทำเนียบรายชื่อพนักงาน
           </h1>
-          <p className="text-slate-500 text-xs mt-1.5 leading-relaxed">
+          <p className="text-slate-500 text-xs mt-1 leading-relaxed">
             ผู้ดูแลแผนกหรือพนักงานสามารถเพิ่มรายชื่อ ยืนยันการร่วมทริป และเช็คชื่อความประสงค์ร่วมทริปสัมมนาได้จากตารางรายแผนกโดยตรงด้านล่าง
           </p>
         </div>
       </div>
 
       {isReadOnlyEmployee && (
-        <div className="bg-amber-50 border border-amber-200 text-amber-850 text-xs p-4 rounded-2xl flex items-center gap-3 font-medium shadow-3xs" id="readonly-warning-banner">
-          <Lock className="w-5 h-5 text-amber-600 shrink-0" />
+        <div className="bg-amber-50 border border-amber-200 text-amber-850 text-xs p-3.5 rounded-xl flex items-center gap-2.5 font-medium shadow-3xs" id="readonly-warning-banner">
+          <Lock className="w-4 h-4 text-amber-600 shrink-0" />
           <div>
             <p className="font-bold text-amber-800">โหมดดูอย่างเดียว (Read-only Mode)</p>
-            <p className="text-[11px] text-amber-750 mt-0.5">เบราว์เซอร์นี้ได้ยืนยันตัวตนในชื่อพนักงานท่านอื่นแล้ว คุณสามารถเข้าชมข้อมูลของคนนี้ได้ แต่ไม่สามารถแก้ไขสถานะ RSVP ของพนักงานคนนี้ได้</p>
+            <p className="text-[10px] text-amber-750 mt-0.5">เบราว์เซอร์นี้ได้ยืนยันตัวตนในชื่อพนักงานท่านอื่นแล้ว คุณสามารถเข้าชมข้อมูลของคนนี้ได้ แต่ไม่สามารถแก้ไขสถานะ RSVP ของพนักงานคนนี้ได้</p>
           </div>
         </div>
       )}
 
       {/* RSVP Quick Statistics Overview Card */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4" id="rsvp-stats-grid">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3" id="rsvp-stats-grid">
         <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex items-center gap-3.5 hover:border-slate-300 transition-all">
           <div className="w-11 h-11 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 border border-indigo-100/50">
             <Users className="w-5 h-5" />
@@ -412,17 +412,17 @@ export default function TripRSVP({
       <div className="w-full">
         
         {/* Attendance lists grouped by Department */}
-        <div className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-sm flex flex-col" id="rsvp-summary-table-panel">
-          <div className="mb-4">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-teal-50 text-teal-600 text-[10px] font-bold border border-teal-100 uppercase tracking-wider mb-2 font-display">
+        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col" id="rsvp-summary-table-panel">
+          <div className="mb-3">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-teal-50 text-teal-600 text-[10px] font-bold border border-teal-100 uppercase tracking-wider mb-1.5 font-display">
               ทำเนียบรายชื่อพนักงานแบ่งตามฝ่าย (Direct Entry Sheet)
             </span>
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
               <div>
-                <h2 className="text-base font-display font-bold text-slate-800 leading-tight">
+                <h2 className="text-sm sm:text-base font-display font-bold text-slate-800 leading-tight">
                   บันทึกสถานะพนักงานแยกแผนก
                 </h2>
-                <p className="text-slate-400 text-xs mt-1 leading-relaxed">
+                <p className="text-slate-400 text-xs mt-0.5 leading-relaxed">
                   {rsvpClosed 
                     ? 'ตารางประมวลผลการลงทะเบียน แยกตามแผนก (ปิดการแก้ไขแล้ว)' 
                     : 'ธุรการฝ่ายสามารถคลิก "ไป" / "ไม่ไป" / "เคลียร์" ในแถวของพนักงานเพื่ออัปเดตข้อมูลได้โดยตรง'
@@ -431,7 +431,7 @@ export default function TripRSVP({
               </div>
               
               {!rsvpClosed && (
-                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-100">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-100 self-start sm:self-auto">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
                   ตารางเปิดบันทึกข้อมูลสด
                 </span>
@@ -440,7 +440,7 @@ export default function TripRSVP({
           </div>
 
           {/* Department Filter Tab Bar */}
-          <div className="mb-6 overflow-x-auto pb-2 scrollbar-hide" id="dept-filter-tab-bar">
+          <div className="mb-4 overflow-x-auto pb-1.5 scrollbar-hide" id="dept-filter-tab-bar">
             <div className="flex flex-nowrap gap-2">
               {/* 'ทั้งหมด' Tab */}
               <button
@@ -489,11 +489,11 @@ export default function TripRSVP({
           </div>
 
           {/* RSVP Status Filter Buttons */}
-          <div className="flex flex-nowrap items-center gap-2 mb-4 p-2.5 bg-slate-50/50 rounded-2xl border border-slate-100 overflow-x-auto scrollbar-hide" id="status-filter-buttons-container">
+          <div className="flex flex-nowrap items-center gap-2 mb-3 p-2 bg-slate-50/50 rounded-xl border border-slate-150 overflow-x-auto scrollbar-hide" id="status-filter-buttons-container">
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mr-2 font-display shrink-0">กรองตามสถานะ:</span>
             <button
               onClick={() => setSelectedStatusFilter('ทั้งหมด')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer shrink-0 ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer shrink-0 ${
                 selectedStatusFilter === 'ทั้งหมด'
                   ? 'bg-slate-800 text-white border-slate-800'
                   : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
@@ -503,7 +503,7 @@ export default function TripRSVP({
             </button>
             <button
               onClick={() => setSelectedStatusFilter('ไป')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer flex items-center gap-1 shrink-0 ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer flex items-center gap-1 shrink-0 ${
                 selectedStatusFilter === 'ไป'
                   ? 'bg-emerald-600 text-white border-emerald-600 shadow-3xs'
                   : 'bg-white text-emerald-600 border-slate-200 hover:border-slate-300'
@@ -514,7 +514,7 @@ export default function TripRSVP({
             </button>
             <button
               onClick={() => setSelectedStatusFilter('ไม่ไป')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer flex items-center gap-1 shrink-0 ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer flex items-center gap-1 shrink-0 ${
                 selectedStatusFilter === 'ไม่ไป'
                   ? 'bg-rose-600 text-white border-rose-600 shadow-3xs'
                   : 'bg-white text-rose-600 border-slate-200 hover:border-slate-300'
@@ -525,7 +525,7 @@ export default function TripRSVP({
             </button>
             <button
               onClick={() => setSelectedStatusFilter('ยังไม่ระบุ')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer flex items-center gap-1 shrink-0 ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer flex items-center gap-1 shrink-0 ${
                 selectedStatusFilter === 'ยังไม่ระบุ'
                   ? 'bg-amber-500 text-white border-amber-500 shadow-3xs'
                   : 'bg-white text-amber-600 border-slate-200 hover:border-slate-300'
@@ -537,7 +537,7 @@ export default function TripRSVP({
           </div>
 
           {/* Table Search Filter Bar */}
-          <div className="mb-5 relative">
+          <div className="mb-3 relative">
             <Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-slate-400" />
             <input
               type="text"
@@ -548,7 +548,7 @@ export default function TripRSVP({
             />
           </div>
 
-          <div className="space-y-6 max-h-[calc(100vh-16rem)] overflow-y-auto pr-1">
+          <div className="space-y-4 max-h-[calc(100vh-16rem)] overflow-y-auto pr-1">
             {filteredEmployeesByDepartment.length === 0 ? (
               <div className="text-center py-12 text-slate-400 italic text-xs bg-slate-50 rounded-2xl border border-dashed border-slate-200">
                 ไม่พบข้อมูลพนักงานที่ตรงกับคำค้นหา

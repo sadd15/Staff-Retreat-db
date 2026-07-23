@@ -1,6 +1,6 @@
 import React from 'react';
 import { SheetConfig } from '../types';
-import { LogOut, RefreshCw, FileSpreadsheet, ExternalLink, Shield, Users, CalendarCheck, FileText, Hotel, ArrowLeftRight, UserCheck, Building2 } from 'lucide-react';
+import { LogOut, RefreshCw, FileSpreadsheet, ExternalLink, Shield, Users, CalendarCheck, FileText, Hotel, ArrowLeftRight, UserCheck, Building2, MessageSquare, Globe, MessageSquareHeart } from 'lucide-react';
 import { User } from 'firebase/auth';
 
 interface HeaderProps {
@@ -9,14 +9,16 @@ interface HeaderProps {
   onLogout: () => void;
   onRefresh: () => void;
   syncing: boolean;
-  activeTab: 'rsvp' | 'booking' | 'directory' | 'summary' | 'admin';
-  setActiveTab: (tab: 'rsvp' | 'booking' | 'directory' | 'summary' | 'admin') => void;
+  activeTab: 'rsvp' | 'booking' | 'directory' | 'summary' | 'feedback' | 'admin';
+  setActiveTab: (tab: 'rsvp' | 'booking' | 'directory' | 'summary' | 'feedback' | 'admin') => void;
   isOfflineMode?: boolean;
   userRole: 'visitor' | 'employee' | 'admin' | null;
   selectedEmployeeName: string | null;
   selectedDepartment: string | null;
   onSwitchRole: () => void;
   isReadOnlyEmployee?: boolean;
+  employeeViewMode?: 'website' | 'survey_only' | null;
+  onToggleEmployeeMode?: () => void;
 }
 
 export default function Header({
@@ -33,14 +35,27 @@ export default function Header({
   selectedDepartment,
   onSwitchRole,
   isReadOnlyEmployee = false,
+  employeeViewMode = null,
+  onToggleEmployeeMode,
 }: HeaderProps) {
-  const tabs: { id: 'rsvp' | 'booking' | 'directory' | 'summary' | 'admin'; label: string; icon: any }[] = [
+  let tabs: { id: 'rsvp' | 'booking' | 'directory' | 'summary' | 'feedback' | 'admin'; label: string; icon: any }[] = [
     { id: 'rsvp', label: 'เช็คชื่อ (RSVP)', icon: CalendarCheck },
     { id: 'booking', label: 'จองห้องพัก', icon: Users },
     { id: 'directory', label: 'ตารางจองรายห้อง', icon: Hotel },
-    { id: 'summary', label: 'สรุปข้อมูล (ส่ง Line)', icon: FileText },
+    { id: 'summary', label: 'สรุปข้อมูล', icon: FileText },
+    { id: 'feedback', label: 'แบบสอบถาม & ความเห็น', icon: MessageSquare },
     ...(userRole === 'admin' ? [{ id: 'admin' as const, label: 'แดชบอร์ดแอดมิน', icon: Shield }] : []),
   ];
+
+  // If user is employee and chose 'website' mode, explicitly hide the feedback menu tab
+  if (userRole === 'employee' && employeeViewMode === 'website') {
+    tabs = tabs.filter(t => t.id !== 'feedback');
+  }
+
+  // If user is employee and chose 'survey_only' mode, show only the feedback tab (single-page mode)
+  if (userRole === 'employee' && employeeViewMode === 'survey_only') {
+    tabs = tabs.filter(t => t.id === 'feedback');
+  }
 
   return (
     <header className="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-xs" id="app-header">
@@ -93,15 +108,52 @@ export default function Header({
                   </span>
                 )}
                 {userRole === 'employee' && (
-                  <span className="text-[10px] font-black text-indigo-600 flex items-center gap-1 max-w-[150px] sm:max-w-none truncate" title={`${selectedEmployeeName} (${selectedDepartment})`}>
-                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isReadOnlyEmployee ? 'bg-amber-500' : 'bg-emerald-500'}`}></span>
-                    👤 {selectedEmployeeName || 'พนักงาน'} <span className="text-[9px] text-slate-400 font-normal">({selectedDepartment})</span>
-                    {isReadOnlyEmployee && (
-                      <span className="text-[9px] bg-amber-500 text-white font-black px-1.5 py-0.2 rounded-md shrink-0 ml-1">
-                        🔒 อ่านอย่างเดียว
-                      </span>
-                    )}
-                  </span>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[10px] font-black text-indigo-600 flex items-center gap-1 max-w-[150px] sm:max-w-none truncate" title={`${selectedEmployeeName} (${selectedDepartment})`}>
+                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isReadOnlyEmployee ? 'bg-amber-500' : 'bg-emerald-500'}`}></span>
+                      👤 {selectedEmployeeName || 'พนักงาน'} <span className="text-[9px] text-slate-400 font-normal">({selectedDepartment})</span>
+                      {isReadOnlyEmployee && (
+                        <span className="text-[9px] bg-amber-500 text-white font-black px-1.5 py-0.2 rounded-md shrink-0 ml-1">
+                          🔒 อ่านอย่างเดียว
+                        </span>
+                      )}
+                    </span>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      {onToggleEmployeeMode && employeeViewMode && (
+                        <button
+                          onClick={onToggleEmployeeMode}
+                          className={`text-[9px] sm:text-[10px] px-2 py-0.5 rounded-lg font-black flex items-center gap-1 transition-all cursor-pointer shadow-3xs shrink-0 ${
+                            employeeViewMode === 'survey_only'
+                              ? 'bg-fuchsia-100 text-fuchsia-950 border border-fuchsia-300 hover:bg-fuchsia-200'
+                              : 'bg-indigo-100 text-indigo-950 border border-indigo-300 hover:bg-indigo-200'
+                          }`}
+                          title="คลิกเพื่อสลับโหมดการเข้าชม (เข้าชมเว็บ ↔ ตอบแบบสอบถาม)"
+                        >
+                          {employeeViewMode === 'survey_only' ? (
+                            <>
+                              <MessageSquareHeart className="w-2.5 h-2.5 text-fuchsia-700" />
+                              <span>โหมดแบบสอบถาม</span>
+                            </>
+                          ) : (
+                            <>
+                              <Globe className="w-2.5 h-2.5 text-indigo-700" />
+                              <span>โหมดเข้าชมเว็บ</span>
+                            </>
+                          )}
+                        </button>
+                      )}
+
+                      <button
+                        onClick={onSwitchRole}
+                        className="text-[9px] sm:text-[10px] px-2 py-0.5 bg-fuchsia-50 hover:bg-fuchsia-100 text-fuchsia-800 border border-fuchsia-200 rounded-lg font-black flex items-center gap-1 transition-all cursor-pointer shadow-3xs active:scale-95 shrink-0 whitespace-nowrap"
+                        title="สลับไปเลือกพนักงานท่านอื่น (Switch Employee)"
+                      >
+                        <span>👥</span>
+                        <span>สลับ</span>
+                      </button>
+                    </div>
+                  </div>
                 )}
                 {userRole === 'admin' && (
                   <span className="text-[10px] font-black text-amber-600 flex items-center gap-1">

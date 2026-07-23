@@ -324,13 +324,13 @@ export default function SummaryReport({ employees, rooms }: SummaryReportProps) 
   };
 
   return (
-    <div className="space-y-6 pb-20 max-w-7xl mx-auto px-4 py-6 font-sans">
-      <div className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-4" id="summary-banner">
+    <div className="space-y-4 pb-10 max-w-7xl mx-auto px-4 py-3 font-sans">
+      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-3" id="summary-banner">
         <div>
-          <h1 className="text-xl sm:text-2xl font-display font-extrabold text-slate-800 leading-tight">
+          <h1 className="text-lg sm:text-xl font-display font-extrabold text-slate-800 leading-tight">
             รายงานสรุปข้อมูลทริปประจำปี
           </h1>
-          <p className="text-slate-500 text-xs mt-1.5 leading-relaxed max-w-2xl">
+          <p className="text-slate-500 text-xs mt-1 leading-relaxed max-w-2xl">
             รายงานสรุปข้อมูลครบถ้วน ทั้งภาพรวมการเดินทาง รายชื่อผู้พักรายห้อง และรายชื่อผู้ที่ยังไม่ได้จัดห้อง
           </p>
         </div>
@@ -338,14 +338,14 @@ export default function SummaryReport({ employees, rooms }: SummaryReportProps) 
         <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={() => handleCopySummaryImage('summary-table-container')}
-            className="hide-in-export group bg-indigo-50 text-indigo-700 hover:bg-indigo-600 hover:text-white px-5 py-2.5 rounded-2xl text-[11px] font-black transition-all flex items-center gap-2 active:scale-95 border border-indigo-100"
+            className="hide-in-export group bg-indigo-50 text-indigo-700 hover:bg-indigo-600 hover:text-white px-4 py-1.5 rounded-xl text-[11px] font-black transition-all flex items-center gap-2 active:scale-95 border border-indigo-100 cursor-pointer"
           >
             <Copy className="w-3.5 h-3.5" />
             คัดลอกรูปภาพ
           </button>
           <button
             onClick={() => handleDownloadSummaryImage('summary-table-container', 'Trip-Summary-All')}
-            className="hide-in-export group bg-slate-800 text-white hover:bg-slate-900 px-5 py-2.5 rounded-2xl text-[11px] font-black transition-all flex items-center gap-2 active:scale-95"
+            className="hide-in-export group bg-slate-800 text-white hover:bg-slate-900 px-4 py-1.5 rounded-xl text-[11px] font-black transition-all flex items-center gap-2 active:scale-95 cursor-pointer"
           >
             <Download className="w-3.5 h-3.5" />
             ดาวน์โหลด
@@ -353,28 +353,28 @@ export default function SummaryReport({ employees, rooms }: SummaryReportProps) 
         </div>
       </div>
 
-      <div className="bg-white rounded-3xl border border-slate-200 p-2 sm:p-4 md:p-8 overflow-x-auto shadow-xs relative">
-        <div id="summary-table-container" className="min-w-[300px] sm:min-w-[700px] p-4 sm:p-8 bg-white max-w-4xl mx-auto border border-slate-100 shadow-sm rounded-2xl">
-          <div className="mb-8 text-center border-b border-slate-200 pb-6">
-            <h2 className="text-2xl font-bold text-slate-800 font-display uppercase tracking-wider">รายงานสรุปทริปประจำปี</h2>
-            <p className="text-sm text-slate-500 mt-2">ข้อมูล ณ วันที่: {new Date().toLocaleString('th-TH')}</p>
+      <div className="bg-white rounded-2xl border border-slate-200 p-2 sm:p-4 overflow-x-auto shadow-xs relative">
+        <div id="summary-table-container" className="min-w-[300px] sm:min-w-[700px] p-4 sm:p-6 bg-white w-full border border-slate-100 shadow-sm rounded-xl">
+          <div className="mb-5 text-center border-b border-slate-200 pb-4">
+            <h2 className="text-xl font-bold text-slate-800 font-display uppercase tracking-wider">รายงานสรุปทริปประจำปี</h2>
+            <p className="text-xs text-slate-500 mt-1">ข้อมูล ณ วันที่: {new Date().toLocaleString('th-TH')}</p>
           </div>
 
           {/* 1. Executive Summary & Department Breakdown */}
-          <div id="summary-section-1" className="mb-8 p-4 sm:p-6 mx-0 sm:-mx-6 bg-white rounded-2xl relative group hover:ring-2 hover:ring-slate-100 transition-all">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-base font-bold text-slate-800 font-display flex items-center gap-2">
-                <span className="w-6 h-6 rounded-md bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs">1</span>
+          <div id="summary-section-1" className="mb-5 p-3 sm:p-4 mx-0 sm:-mx-4 bg-white rounded-xl relative group hover:ring-2 hover:ring-slate-100 transition-all">
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="text-sm sm:text-base font-bold text-slate-800 font-display flex items-center gap-2">
+                <span className="w-5 h-5 rounded-md bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs">1</span>
                 สรุปภาพรวมผู้ร่วมเดินทางและการเข้าร่วมรายแผนก
               </h3>
-              <button onClick={() => handleCopySummaryImage('summary-section-1')} className="hide-in-export opacity-0 group-hover:opacity-100 flex items-center gap-1.5 text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1.5 rounded hover:bg-indigo-100 transition-opacity">
+              <button onClick={() => handleCopySummaryImage('summary-section-1')} className="hide-in-export opacity-0 group-hover:opacity-100 flex items-center gap-1.5 text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded hover:bg-indigo-100 transition-opacity cursor-pointer">
                 <Copy className="w-3 h-3" /> คัดลอกส่วนนี้
               </button>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6">
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-center">
-                <p className="text-xs font-bold text-slate-500 mb-1">พนักงานทั้งหมด</p>
-                <p className="text-2xl font-black text-slate-800">{employees.length}</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-3 mb-4">
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-center">
+                <p className="text-[10px] sm:text-xs font-bold text-slate-500 mb-0.5">พนักงานทั้งหมด</p>
+                <p className="text-xl sm:text-2xl font-black text-slate-800">{employees.length}</p>
               </div>
               <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 text-center">
                 <p className="text-xs font-bold text-emerald-600 mb-1">ตอบรับ (ไป)</p>
@@ -654,17 +654,17 @@ export default function SummaryReport({ employees, rooms }: SummaryReportProps) 
           </div>
 
           {/* 3. Missing / Pending action lists */}
-          <div id="summary-section-4" className="mb-8 p-4 sm:p-6 mx-0 sm:-mx-6 bg-white rounded-2xl relative group hover:ring-2 hover:ring-slate-100 transition-all">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-base font-bold text-slate-800 font-display flex items-center gap-2">
-                <span className="w-6 h-6 rounded-md bg-rose-100 text-rose-600 flex items-center justify-center text-xs">3</span>
+          <div id="summary-section-4" className="mb-5 p-3 sm:p-4 mx-0 sm:-mx-4 bg-white rounded-xl relative group hover:ring-2 hover:ring-slate-100 transition-all">
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="text-sm sm:text-base font-bold text-slate-800 font-display flex items-center gap-2">
+                <span className="w-5 h-5 rounded-md bg-rose-100 text-rose-600 flex items-center justify-center text-xs">3</span>
                 ผู้ที่แจ้งว่าไปแต่ยังไม่ได้จัดห้อง
               </h3>
               <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity hide-in-export">
-                <button onClick={handleExportPendingRoomCsv} className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1.5 rounded hover:bg-emerald-100 transition-colors">
+                <button onClick={handleExportPendingRoomCsv} className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded hover:bg-emerald-100 transition-colors cursor-pointer">
                   <Download className="w-3 h-3" /> ส่งออก CSV
                 </button>
-                <button onClick={() => handleCopySummaryImage('summary-section-4')} className="flex items-center gap-1.5 text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1.5 rounded hover:bg-indigo-100 transition-colors">
+                <button onClick={() => handleCopySummaryImage('summary-section-4')} className="flex items-center gap-1.5 text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded hover:bg-indigo-100 transition-colors cursor-pointer">
                   <Copy className="w-3 h-3" /> คัดลอกส่วนนี้
                 </button>
               </div>
@@ -701,17 +701,17 @@ export default function SummaryReport({ employees, rooms }: SummaryReportProps) 
           </div>
 
           {/* 4. Complete RSVP List */}
-          <div id="summary-section-5" className="mb-8 p-4 sm:p-6 mx-0 sm:-mx-6 bg-white rounded-2xl relative group hover:ring-2 hover:ring-slate-100 transition-all">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-base font-bold text-slate-800 font-display flex items-center gap-2">
-                <span className="w-6 h-6 rounded-md bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs">4</span>
+          <div id="summary-section-5" className="mb-5 p-3 sm:p-4 mx-0 sm:-mx-4 bg-white rounded-xl relative group hover:ring-2 hover:ring-slate-100 transition-all">
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="text-sm sm:text-base font-bold text-slate-800 font-display flex items-center gap-2">
+                <span className="w-5 h-5 rounded-md bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs">4</span>
                 สถานะการตอบรับของพนักงานทั้งหมด
               </h3>
               <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity hide-in-export">
-                <button onClick={handleExportRsvpCsv} className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1.5 rounded hover:bg-emerald-100 transition-colors">
+                <button onClick={handleExportRsvpCsv} className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded hover:bg-emerald-100 transition-colors cursor-pointer">
                   <Download className="w-3 h-3" /> ส่งออก CSV
                 </button>
-                <button onClick={() => handleCopySummaryImage('summary-section-5')} className="flex items-center gap-1.5 text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1.5 rounded hover:bg-indigo-100 transition-colors">
+                <button onClick={() => handleCopySummaryImage('summary-section-5')} className="flex items-center gap-1.5 text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded hover:bg-indigo-100 transition-colors cursor-pointer">
                   <Copy className="w-3 h-3" /> คัดลอกส่วนนี้
                 </button>
               </div>

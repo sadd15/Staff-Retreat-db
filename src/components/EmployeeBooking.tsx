@@ -677,24 +677,24 @@ export default function EmployeeBooking({
 
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6 font-sans space-y-8" id="booking-system-container">
+    <div className="max-w-7xl mx-auto px-4 py-3 font-sans space-y-4" id="booking-system-container">
       
       {/* Visual Header Banner */}
-      <div className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center md:justify-between gap-4" id="booking-banner">
+      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center md:justify-between gap-3" id="booking-banner">
         <div>
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-50 text-indigo-600 text-[10px] font-bold border border-indigo-100 uppercase tracking-wider mb-2 font-display">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-50 text-indigo-600 text-[10px] font-bold border border-indigo-100 uppercase tracking-wider mb-1.5 font-display">
             ระบบจองห้องพักพนักงาน (Hotel Allocation Hub)
           </span>
-          <h1 className="text-xl sm:text-2xl font-display font-extrabold text-slate-800 leading-tight">
+          <h1 className="text-lg sm:text-xl font-display font-extrabold text-slate-800 leading-tight">
             จัดสรรและเลือกห้องพักอย่างง่ายดาย
           </h1>
-          <p className="text-slate-500 text-xs mt-1.5 leading-relaxed">
+          <p className="text-slate-500 text-xs mt-1 leading-relaxed">
             เลือกเพื่อนร่วมห้อง และระบุเตียงว่างในโรงแรมที่สอดคล้องตามเงื่อนไขเพศ เพื่อการเดินทางทริปที่สะดวกสบายที่สุด
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <span className="inline-flex items-center gap-1.5 text-xs text-slate-500 bg-slate-50 px-3.5 py-2 border border-slate-200 rounded-2xl font-medium">
-            <RefreshCw className={`w-3.5 h-3.5 text-indigo-500 ${syncing ? 'animate-spin' : ''}`} />
+          <span className="inline-flex items-center gap-1.5 text-xs text-slate-500 bg-slate-50 px-3.5 py-1.5 border border-slate-200 rounded-xl font-medium">
+            <RefreshCw className={`w-3 h-3 text-indigo-500 ${syncing ? 'animate-spin' : ''}`} />
             {syncing ? 'กำลังบันทึกลงคลาวด์...' : 'ข้อมูลเชื่อมโยงกับ Google Sheets เรียลไทม์'}
           </span>
         </div>
@@ -863,11 +863,11 @@ export default function EmployeeBooking({
       </div>
 
       {/* The Map View (Top Section) */}
-      <div className="bg-white rounded-xl sm:rounded-3xl border border-slate-200 shadow-sm overflow-hidden mb-4 sm:mb-8" id="booking-map-section">
-        <div className="border-b border-slate-100 p-4 sm:p-6 bg-slate-50/50">
+      <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-3 sm:mb-4" id="booking-map-section">
+        <div className="border-b border-slate-100 p-3 sm:p-4 bg-slate-50/50">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-              <Compass className="w-5 h-5" />
+            <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+              <Compass className="w-4 h-4" />
             </div>
             <div>
               <h2 className="text-base font-display font-extrabold text-slate-800">แผนที่ที่พัก (Resort Map)</h2>
@@ -875,7 +875,7 @@ export default function EmployeeBooking({
             </div>
           </div>
         </div>
-        <div className="p-2 sm:p-4 bg-slate-50/30">
+        <div className="p-1 sm:p-3 bg-slate-50/30">
           <ResortMap 
             rooms={rooms} 
             employees={employees} 
@@ -890,14 +890,14 @@ export default function EmployeeBooking({
       </div>
 
       {/* The Step-by-Step Interactive Booking Wizard */}
-      <div className="bg-white rounded-xl sm:rounded-3xl border border-slate-200 shadow-sm overflow-hidden" id="booking-system-main">
-        <div className="p-0 sm:p-6">
+      <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm overflow-hidden" id="booking-system-main">
+        <div className="p-0 sm:p-4">
               {/* Wizard Header & Step Nav */}
-          <div className="border-b border-slate-100 bg-slate-50/50 p-4 sm:p-6 sm:rounded-2xl">
-              <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="border-b border-slate-100 bg-slate-50/50 p-3 sm:p-4 sm:rounded-xl">
+              <div className="flex flex-col md:flex-row items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center">
-                    <Sparkles className="w-5 h-5 animate-pulse" />
+                  <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center">
+                    <Sparkles className="w-4 h-4 animate-pulse" />
                   </div>
                   <div>
                     <h2 className="text-base font-display font-extrabold text-slate-800">

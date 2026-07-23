@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Employee, Room, SheetConfig } from './types';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Employee, Room, SheetConfig, TripFeedback } from './types';
 import Header from './components/Header';
 import EmployeeBooking from './components/EmployeeBooking';
 import AdminDashboard from './components/AdminDashboard';
@@ -7,6 +7,7 @@ import TripRSVP from './components/TripRSVP';
 import SummaryReport from './components/SummaryReport';
 import RoomDirectory from './components/RoomDirectory';
 import ResortMap from './components/ResortMap';
+import TripFeedbackComponent from './components/TripFeedback';
 import { initAuth, googleSignIn, getAccessToken, logout } from './lib/authService';
 import { 
   listenToEmployees, 
@@ -28,10 +29,12 @@ import {
   clearSheetConfig,
   getAdminPin,
   updateAdminPin,
-  updateEmployeeVerification
+  updateEmployeeVerification,
+  listenToFeedbacks,
+  submitFeedbackToFirestore
 } from './lib/firebaseService';
 import { sendAdminPinEmail } from './lib/emailService';
-import { Loader2, AlertCircle, FileSpreadsheet, Sparkles, ChevronRight, Shield, Eye, EyeOff, KeyRound, Lock, Heart, Mail, Users, Search, Building2, Check, CheckCircle2, Home, ArrowRight, X } from 'lucide-react';
+import { Loader2, AlertCircle, FileSpreadsheet, Sparkles, ChevronRight, Shield, Eye, EyeOff, KeyRound, Lock, Heart, Mail, Users, Search, Building2, Check, CheckCircle2, Home, ArrowRight, X, Globe, MessageSquareHeart } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ToastContainer, toast } from './components/Toast';
 
@@ -49,7 +52,8 @@ export default function App() {
   const [sheetInput, setSheetInput] = useState('');
 
   // Tab Selection
-  const [activeTab, setActiveTab] = useState<'rsvp' | 'booking' | 'directory' | 'summary' | 'admin'>('rsvp');
+  const [activeTab, setActiveTab] = useState<'rsvp' | 'booking' | 'directory' | 'summary' | 'feedback' | 'admin'>('rsvp');
+  const [feedbacks, setFeedbacks] = useState<TripFeedback[]>([]);
   const [bookingSelectedRoomId, setBookingSelectedRoomId] = useState<string | null>(null);
   const [googleUser, setGoogleUser] = useState<any>(null);
   const [googleToken, setGoogleToken] = useState<string | null>(null);
@@ -80,11 +84,22 @@ export default function App() {
     return localStorage.getItem('companytrip_verified_employee_id') || null;
   });
 
+  // Employee View Mode: 'website' (browsing site, hides survey tab) | 'survey_only' (opens survey page only)
+  const [employeeViewMode, setEmployeeViewMode] = useState<'website' | 'survey_only' | null>(() => {
+    return (localStorage.getItem('companytrip_employee_view_mode') as any) || 'website';
+  });
+
+  // Modal for employee menu choice (Website vs Survey)
+  const [showEmployeeModeModal, setShowEmployeeModeModal] = useState(false);
+  const [pendingEmployeeLogin, setPendingEmployeeLogin] = useState<{ empId: string; dept: string } | null>(null);
+
   const isReadOnlyEmployee = React.useMemo(() => {
     if (userRole !== 'employee') return false;
+    // In survey_only mode, unlock device lock restrictions completely so any staff can submit surveys for any account
+    if (employeeViewMode === 'survey_only') return false;
     if (!verifiedEmployeeId) return false;
     return selectedEmployeeId !== verifiedEmployeeId;
-  }, [userRole, selectedEmployeeId, verifiedEmployeeId]);
+  }, [userRole, selectedEmployeeId, verifiedEmployeeId, employeeViewMode]);
 
   const selectedEmployeeName = React.useMemo(() => {
     if (!selectedEmployeeId) return null;
@@ -142,14 +157,16 @@ export default function App() {
     setLandingError(null);
   };
 
-  const handleLoginAsEmployeeDirectly = (empId: string, dept: string) => {
+  const handleLoginAsEmployeeDirectly = (empId: string, dept: string, mode: 'website' | 'survey_only' = 'website') => {
     setUserRole('employee');
     setSelectedEmployeeId(empId);
     setSelectedDepartment(dept);
+    setEmployeeViewMode(mode);
     localStorage.setItem('companytrip_user_role', 'employee');
     localStorage.setItem('companytrip_selected_employee_id', empId);
     localStorage.setItem('companytrip_selected_department', dept);
-    setActiveTab('rsvp');
+    localStorage.setItem('companytrip_employee_view_mode', mode);
+    setActiveTab(mode === 'survey_only' ? 'feedback' : 'rsvp');
     setLandingError(null);
   };
 
@@ -159,11 +176,13 @@ export default function App() {
       return;
     }
     
-    // If this device is not verified as any employee yet, prompt verification
+    setPendingEmployeeLogin({ empId: selectedEmpIdInput, dept: selectedDeptInput });
+
+    // If this device is not verified as any employee yet, prompt verification modal
     if (!verifiedEmployeeId) {
       setShowEmployeeVerifyModal(true);
     } else {
-      handleLoginAsEmployeeDirectly(selectedEmpIdInput, selectedDeptInput);
+      setShowEmployeeModeModal(true);
     }
   };
 
@@ -174,15 +193,53 @@ export default function App() {
       await updateEmployeeVerification(selectedEmpIdInput, true);
       setVerifiedEmployeeId(selectedEmpIdInput);
       localStorage.setItem('companytrip_verified_employee_id', selectedEmpIdInput);
-      handleLoginAsEmployeeDirectly(selectedEmpIdInput, selectedDeptInput);
       setShowEmployeeVerifyModal(false);
-      toast.success('ยืนยันตัวตนและเข้าสู่ระบบสำเร็จ! ยินดีต้อนรับครับ 🎉');
+      setPendingEmployeeLogin({ empId: selectedEmpIdInput, dept: selectedDeptInput });
+      setShowEmployeeModeModal(true);
+      toast.success('ยืนยันตัวตนสำเร็จ! โปรดเลือกรูปแบบการเข้าใช้งานครับ 🎉');
     } catch (err: any) {
       console.error(err);
       setLandingError(`ไม่สามารถบันทึกการยืนยันตัวตนได้: ${err.message}`);
       toast.error('ไม่สามารถยืนยันตัวตนได้ ❌');
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const confirmEmployeeModeChoice = (mode: 'website' | 'survey_only') => {
+    if (!pendingEmployeeLogin) return;
+
+    // Unlock device lock when entering survey mode by updating verifiedEmployeeId
+    if (mode === 'survey_only') {
+      setVerifiedEmployeeId(pendingEmployeeLogin.empId);
+      localStorage.setItem('companytrip_verified_employee_id', pendingEmployeeLogin.empId);
+    }
+
+    handleLoginAsEmployeeDirectly(pendingEmployeeLogin.empId, pendingEmployeeLogin.dept, mode);
+    setShowEmployeeModeModal(false);
+    setPendingEmployeeLogin(null);
+    if (mode === 'survey_only') {
+      toast.success('เข้าสู่โหมดตอบแบบสอบถามเรียบร้อยแล้ว (ปลดล็อคข้อจำกัดเครื่องสลับบัญชีได้ฟรี) 📝');
+    } else {
+      toast.success('เข้าสู่เว็บไซต์ระบบจองห้องพักเรียบร้อยแล้ว 🌐');
+    }
+  };
+
+  const toggleEmployeeMode = () => {
+    if (userRole !== 'employee') return;
+    const nextMode = employeeViewMode === 'survey_only' ? 'website' : 'survey_only';
+    setEmployeeViewMode(nextMode);
+    localStorage.setItem('companytrip_employee_view_mode', nextMode);
+    if (nextMode === 'survey_only') {
+      setActiveTab('feedback');
+      if (selectedEmployeeId) {
+        setVerifiedEmployeeId(selectedEmployeeId);
+        localStorage.setItem('companytrip_verified_employee_id', selectedEmployeeId);
+      }
+      toast.info('สลับไปยังโหมดทำแบบสอบถาม (ปลดล็อคสิทธิ์สำหรับทุกบัญชีเรียบร้อย) 📝');
+    } else {
+      setActiveTab('rsvp');
+      toast.info('สลับไปยังโหมดเยี่ยมชมเว็บไซต์ระบบจองห้องพักแล้ว 🌐');
     }
   };
 
@@ -211,15 +268,19 @@ export default function App() {
     setUserRole(null);
     setSelectedEmployeeId(null);
     setSelectedDepartment(null);
+    setEmployeeViewMode(null);
     setIsAdminAuthenticated(false);
     localStorage.removeItem('companytrip_user_role');
     localStorage.removeItem('companytrip_selected_employee_id');
     localStorage.removeItem('companytrip_selected_department');
+    localStorage.removeItem('companytrip_employee_view_mode');
     setSelectedDeptInput('');
     setSelectedEmpIdInput('');
     setAdminPinInput('');
     setActiveTab('rsvp');
     setLandingError(null);
+    setShowEmployeeModeModal(false);
+    setPendingEmployeeLogin(null);
     toast.info('ออกจากระบบและสลับบทบาทการใช้งานแล้ว 🚪');
   };
 
@@ -265,16 +326,21 @@ export default function App() {
       }
     });
 
+    const unsubFeedbacks = listenToFeedbacks((updatedFeedbacks) => {
+      setFeedbacks(updatedFeedbacks);
+    });
+
     return () => {
       unsubEmployees();
       unsubRooms();
       unsubSettings();
+      unsubFeedbacks();
       unsubAuth();
     };
   }, []);
 
   // Update Tab Selection with Admin check
-  const handleSetTab = (tab: 'rsvp' | 'booking' | 'directory' | 'summary' | 'admin') => {
+  const handleSetTab = (tab: 'rsvp' | 'booking' | 'directory' | 'summary' | 'feedback' | 'admin') => {
     if (tab === 'admin' && !isAdminAuthenticated) {
       setShowPinEntry(true);
       return;
@@ -475,6 +541,27 @@ export default function App() {
     }
   };
 
+  // Submit Employee Trip Feedback
+  const handleFeedbackSubmit = async (feedbackData: Omit<TripFeedback, 'id' | 'submittedAt'>) => {
+    setSyncing(true);
+    try {
+      await submitFeedbackToFirestore(feedbackData);
+    } catch (err: any) {
+      console.error(err);
+      throw new Error(`ไม่สามารถส่งแบบสอบถามได้: ${err.message}`);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  // Check if current logged-in employee has a pending survey (they clicked "Going" but haven't answered yet)
+  const currentEmployeeHasPendingSurvey = useMemo(() => {
+    if (userRole !== 'employee' || !selectedEmployeeId) return false;
+    const emp = employees.find(e => e.id === selectedEmployeeId);
+    if (!emp || emp.rsvpStatus !== 'ไป') return false;
+    return !feedbacks.some(f => f.employeeId === selectedEmployeeId);
+  }, [userRole, selectedEmployeeId, employees, feedbacks]);
+
   const handleResetAllBookings = async () => {
     setSyncing(true);
     try {
@@ -644,7 +731,29 @@ export default function App() {
         selectedDepartment={selectedDepartment}
         onSwitchRole={handleSwitchRole}
         isReadOnlyEmployee={isReadOnlyEmployee}
+        employeeViewMode={employeeViewMode}
+        onToggleEmployeeMode={toggleEmployeeMode}
       />
+
+      {/* Pending Survey Polite Nudge Banner (Hidden if employee chose website mode to keep feedback hidden) */}
+      {currentEmployeeHasPendingSurvey && activeTab !== 'feedback' && employeeViewMode !== 'website' && (
+        <div className="bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-705 text-white shadow-md border-t border-indigo-500 animate-in slide-in-from-top duration-300">
+          <div className="max-w-7xl mx-auto px-4 py-2.5 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2 text-center sm:text-left">
+            <div className="flex items-center gap-2">
+              <span className="flex h-2 w-2 rounded-full bg-amber-400 animate-ping shrink-0" />
+              <p className="text-xs font-bold leading-none">
+                📝 คุณ <span className="text-amber-300 font-extrabold">{selectedEmployeeName}</span> มีแบบสอบถามประเมินความพึงพอใจทริปสัมมนานี้ที่ยังไม่ได้ทำ โปรดช่วยร่วมประเมินสั้นๆ เพื่อแชร์ความเห็นกันนะครับ!
+              </p>
+            </div>
+            <button
+              onClick={() => handleSetTab('feedback')}
+              className="px-3.5 py-1 bg-white text-indigo-700 hover:bg-indigo-50 font-black text-[10px] rounded-lg transition-all shadow-sm shrink-0 uppercase tracking-wider cursor-pointer active:scale-95"
+            >
+              ไปทำแบบสอบถามเลย ✨
+            </button>
+          </div>
+        </div>
+      )}
 
       <main className="flex-1">
         {dataLoading ? (
@@ -973,24 +1082,24 @@ export default function App() {
 
                   {/* Directory Body (Compact space-y-3) */}
                   <div className="p-4 sm:p-5 bg-white space-y-3.5 flex-1 overflow-y-auto flex flex-col">
-                    {/* Toolbar: Search & RSVP Filter (Merged Row) */}
+                    {/* Toolbar: Search & RSVP Filter */}
                     <div className="flex flex-col md:flex-row md:items-center gap-2.5">
                       {/* Search Input */}
                       <div className="relative flex-1">
-                        <Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-slate-400" />
+                        <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
                         <input
                           type="text"
                           placeholder="ค้นหาชื่อ นามสกุล หรือฝ่าย..."
                           value={landingSearchQuery}
                           onChange={(e) => setLandingSearchQuery(e.target.value)}
-                          className="w-full pl-8.5 pr-4 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-1.5 focus:ring-indigo-500 focus:border-indigo-500 font-medium"
+                          className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:bg-white rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-bold transition-all shadow-3xs"
                         />
                       </div>
 
                       {/* RSVP Quick Filters */}
-                      <div className="flex items-center gap-1.5 shrink-0 bg-slate-50 p-1 rounded-lg border border-slate-200/60 self-start md:self-auto">
-                        <span className="font-extrabold text-slate-400 text-[9px] px-1.5 uppercase tracking-wider">RSVP:</span>
-                        <div className="flex gap-0.5">
+                      <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 bg-slate-50 p-1.5 rounded-xl border border-slate-200/80 shrink-0">
+                        <span className="font-black text-slate-500 text-[10px] px-1 uppercase tracking-wider shrink-0">RSVP:</span>
+                        <div className="flex gap-1">
                           {['all', 'ไป', 'ไม่ไป', 'ยังไม่ระบุ'].map((status) => {
                             const label = status === 'all' ? 'ทั้งหมด' : status === 'ไป' ? 'ไปร่วม' : status === 'ไม่ไป' ? 'ไม่ไป' : 'ยังไม่ระบุ';
                             const isActive = landingRsvpFilter === status;
@@ -998,16 +1107,16 @@ export default function App() {
                               <button
                                 key={status}
                                 onClick={() => setLandingRsvpFilter(status)}
-                                className={`px-2 py-0.5 rounded font-black text-[10px] transition-all cursor-pointer ${
+                                className={`px-2.5 py-1 rounded-lg font-black text-xs transition-all cursor-pointer shrink-0 ${
                                   isActive
                                     ? status === 'ไป'
-                                      ? 'bg-emerald-600 text-white shadow-3xs'
+                                      ? 'bg-emerald-600 text-white shadow-sm'
                                       : status === 'ไม่ไป'
-                                        ? 'bg-rose-600 text-white shadow-3xs'
+                                        ? 'bg-rose-600 text-white shadow-sm'
                                         : status === 'ยังไม่ระบุ'
-                                          ? 'bg-amber-600 text-white shadow-3xs'
-                                          : 'bg-slate-800 text-white shadow-3xs'
-                                    : 'bg-transparent text-slate-650 hover:bg-slate-200'
+                                          ? 'bg-amber-600 text-white shadow-sm'
+                                          : 'bg-slate-900 text-white shadow-sm'
+                                    : 'bg-white text-slate-700 hover:bg-slate-200/70 border border-slate-200/60'
                                 }`}
                               >
                                 {label}
@@ -1018,16 +1127,16 @@ export default function App() {
                       </div>
                     </div>
 
-                    {/* Department Filters (Compact Row) */}
-                    <div className="flex flex-wrap items-center gap-2 text-xs py-1.5 border-t border-b border-slate-100">
-                      <span className="font-extrabold text-slate-400 text-[9px] uppercase tracking-wider">กรองตามฝ่าย:</span>
-                      <div className="flex flex-wrap gap-1">
+                    {/* Department Filters */}
+                    <div className="flex items-center gap-2 text-xs py-2 border-t border-b border-slate-100 overflow-x-auto no-scrollbar">
+                      <span className="font-black text-slate-500 text-[10px] uppercase tracking-wider shrink-0">ฝ่าย:</span>
+                      <div className="flex items-center gap-1.5">
                         <button
                           onClick={() => setLandingDeptFilter('all')}
-                          className={`px-2 py-0.5 rounded-md font-bold text-[10px] transition-all cursor-pointer ${
+                          className={`px-2.5 py-1 rounded-lg font-black text-xs transition-all cursor-pointer shrink-0 ${
                             landingDeptFilter === 'all'
-                              ? 'bg-indigo-600 text-white shadow-3xs'
-                              : 'bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200/50'
+                              ? 'bg-indigo-600 text-white shadow-xs'
+                              : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200/70'
                           }`}
                         >
                           ทั้งหมด
@@ -1036,10 +1145,10 @@ export default function App() {
                           <button
                             key={d}
                             onClick={() => setLandingDeptFilter(d)}
-                            className={`px-2 py-0.5 rounded-md font-bold text-[10px] transition-all cursor-pointer ${
+                            className={`px-2.5 py-1 rounded-lg font-black text-xs transition-all cursor-pointer shrink-0 ${
                               landingDeptFilter === d
-                                ? 'bg-indigo-600 text-white shadow-3xs'
-                                : 'bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200/50'
+                                ? 'bg-indigo-600 text-white shadow-xs'
+                                : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200/70'
                             }`}
                           >
                             {d}
@@ -1048,119 +1157,210 @@ export default function App() {
                       </div>
                     </div>
 
-                    {/* Table Area (Compact with small margins) */}
-                    <div className="flex-1 overflow-x-auto min-h-0">
+                    {/* Directory Results Container */}
+                    <div className="flex-1 overflow-y-auto min-h-0">
                       {filteredEmployeesForDirectory.length === 0 ? (
-                        <div className="py-12 text-center text-slate-450 text-xs italic">
+                        <div className="py-12 text-center text-slate-500 text-xs sm:text-sm font-bold bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
                           ไม่พบข้อมูลพนักงานที่ตรงกับเงื่อนไขการค้นหา
                         </div>
                       ) : (
-                        <div className="border border-slate-200 rounded-xl overflow-hidden max-h-[380px] overflow-y-auto shadow-4xs">
-                          <table className="w-full text-left border-collapse">
-                            <thead className="sticky top-0 bg-slate-50 z-10 border-b border-slate-200">
-                              <tr className="text-[10px] text-slate-500 font-extrabold font-display uppercase tracking-wider">
-                                <th className="px-3.5 py-2 text-center w-12">ลำดับ</th>
-                                <th className="px-3.5 py-2">ชื่อ - นามสกุลพนักงาน</th>
-                                <th className="px-3.5 py-2">ฝ่าย / แผนก</th>
-                                <th className="px-3.5 py-2 text-center w-16">เพศ</th>
-                                <th className="px-3.5 py-2 text-center">สถานะ RSVP</th>
-                                <th className="px-3.5 py-2 text-center">ห้องพัก</th>
-                                <th className="px-3.5 py-2 text-right">ดำเนินการ</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100 bg-white">
-                              {filteredEmployeesForDirectory.map((emp, index) => {
-                                const rsvp = emp.rsvpStatus || 'ยังไม่ระบุ';
-                                const isBooked = !!emp.roomId;
+                        <>
+                          {/* Mobile View: High-Legibility Touchable Cards */}
+                          <div className="block sm:hidden space-y-2.5 max-h-[58vh] overflow-y-auto pr-0.5">
+                            <div className="text-[11px] font-black text-slate-500 px-1 flex items-center justify-between">
+                              <span>พบทั้งหมด {filteredEmployeesForDirectory.length} คน</span>
+                              <span>แตะที่การ์ดเพื่อเลือกจอง</span>
+                            </div>
 
-                                return (
-                                  <tr
-                                    key={emp.id}
-                                    onClick={() => {
-                                      setSelectedDeptInput(emp.department);
-                                      setSelectedEmpIdInput(emp.id);
-                                      setLandingError(null);
-                                      setIsLandingDirectoryModalOpen(false);
-                                      document.getElementById('mode-selection-container')?.scrollIntoView({ behavior: 'smooth' });
-                                    }}
-                                    className="text-[11px] hover:bg-indigo-50/40 transition-colors cursor-pointer group"
-                                  >
-                                    {/* Index */}
-                                    <td className="px-3.5 py-1.5 text-center text-slate-400 font-bold font-mono">
-                                      {index + 1}
-                                    </td>
+                            {filteredEmployeesForDirectory.map((emp) => {
+                              const rsvp = emp.rsvpStatus || 'ยังไม่ระบุ';
+                              const isBooked = !!emp.roomId;
 
-                                    {/* Name & ID */}
-                                    <td className="px-3.5 py-1.5">
-                                      <div className="font-extrabold text-slate-800 text-xs group-hover:text-indigo-600 transition-colors flex items-center gap-1.5">
-                                        <span>{emp.name}</span>
-                                        <span className="text-[9px] font-mono font-medium text-slate-400 bg-slate-50 border border-slate-100 px-1 rounded">
-                                          {emp.id}
-                                        </span>
-                                      </div>
-                                    </td>
-
-                                    {/* Department */}
-                                    <td className="px-3.5 py-1.5">
-                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-50 text-slate-650 border border-slate-200/40">
-                                        <Building2 className="w-2.5 h-2.5 text-slate-400" />
-                                        {emp.department}
+                              return (
+                                <div
+                                  key={emp.id}
+                                  onClick={() => {
+                                    setSelectedDeptInput(emp.department);
+                                    setSelectedEmpIdInput(emp.id);
+                                    setLandingError(null);
+                                    setIsLandingDirectoryModalOpen(false);
+                                    document.getElementById('mode-selection-container')?.scrollIntoView({ behavior: 'smooth' });
+                                  }}
+                                  className="p-3.5 bg-white hover:bg-indigo-50/50 border-2 border-slate-200 hover:border-indigo-400 rounded-2xl transition-all cursor-pointer space-y-2.5 active:scale-[0.98] shadow-3xs group"
+                                >
+                                  {/* Top Row: Name, ID, Gender */}
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className="font-black text-slate-950 text-sm leading-snug group-hover:text-indigo-600 transition-colors">
+                                        {emp.name}
                                       </span>
-                                    </td>
-
-                                    {/* Gender */}
-                                    <td className="px-3.5 py-1.5 text-center">
-                                      <span className={`inline-block px-1.5 py-0.2 rounded font-extrabold text-[9px] ${
-                                        emp.gender === 'หญิง'
-                                          ? 'bg-rose-50 text-rose-600 border border-rose-100/30'
-                                          : 'bg-blue-50 text-blue-600 border border-blue-100/30'
-                                      }`}>
-                                        {emp.gender}
+                                      <span className="text-[10px] font-bold text-slate-600 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded-md">
+                                        ID: {emp.id}
                                       </span>
-                                    </td>
+                                    </div>
+                                    <span className={`shrink-0 px-2 py-0.5 rounded-md font-black text-[10px] ${
+                                      emp.gender === 'หญิง'
+                                        ? 'bg-rose-100 text-rose-800 border border-rose-200'
+                                        : 'bg-blue-100 text-blue-800 border border-blue-200'
+                                    }`}>
+                                      {emp.gender}
+                                    </span>
+                                  </div>
 
-                                    {/* RSVP */}
-                                    <td className="px-3.5 py-1.5 text-center">
-                                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black ${
-                                        rsvp === 'ไป'
-                                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/20'
-                                          : rsvp === 'ไม่ไป'
-                                            ? 'bg-rose-50 text-rose-700 border border-rose-200/20'
-                                            : 'bg-amber-50 text-amber-700 border border-amber-200/20'
-                                      }`}>
-                                        <span className={`w-1 h-1 rounded-full ${
-                                          rsvp === 'ไป' ? 'bg-emerald-500' : rsvp === 'ไม่ไป' ? 'bg-rose-500' : 'bg-amber-500'
-                                        }`} />
-                                        {rsvp === 'ไป' ? 'ไปร่วมทริป' : rsvp === 'ไม่ไป' ? 'สละสิทธิ์' : 'ยังไม่ระบุ'}
-                                      </span>
-                                    </td>
+                                  {/* Badges Row: Dept & RSVP */}
+                                  <div className="flex items-center justify-between gap-2 pt-0.5">
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-black bg-slate-100/90 text-slate-800 border border-slate-200/80">
+                                      <Building2 className="w-3 h-3 text-slate-500" />
+                                      {emp.department}
+                                    </span>
 
-                                    {/* Room status */}
-                                    <td className="px-3.5 py-1.5 text-center">
+                                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black ${
+                                      rsvp === 'ไป'
+                                        ? 'bg-emerald-100 text-emerald-950 border border-emerald-300'
+                                        : rsvp === 'ไม่ไป'
+                                          ? 'bg-rose-100 text-rose-950 border border-rose-300'
+                                          : 'bg-amber-100 text-amber-950 border border-amber-300'
+                                    }`}>
+                                      <span className={`w-1.5 h-1.5 rounded-full ${
+                                        rsvp === 'ไป' ? 'bg-emerald-600' : rsvp === 'ไม่ไป' ? 'bg-rose-600' : 'bg-amber-600'
+                                      }`} />
+                                      {rsvp === 'ไป' ? 'ไปร่วมทริป' : rsvp === 'ไม่ไป' ? 'สละสิทธิ์' : 'ยังไม่ระบุ'}
+                                    </span>
+                                  </div>
+
+                                  {/* Bottom Row: Room Status & Action */}
+                                  <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100">
+                                    <div className="flex items-center gap-1.5 text-xs">
+                                      <span className="text-slate-500 font-bold">ห้องพัก:</span>
                                       {isBooked ? (
-                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-indigo-50 text-indigo-700 border border-indigo-100/40">
-                                          <Home className="w-2.5 h-2.5 text-indigo-500" />
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-black bg-indigo-100 text-indigo-950 border border-indigo-200">
+                                          <Home className="w-3 h-3 text-indigo-600" />
                                           ห้อง {emp.roomId}
                                         </span>
                                       ) : (
-                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-50 text-slate-400">
-                                          ว่าง
+                                        <span className="text-slate-500 font-bold italic text-[11px]">
+                                          ยังไม่ได้เลือกห้อง
                                         </span>
                                       )}
-                                    </td>
+                                    </div>
 
-                                    {/* Quick Selection Link */}
-                                    <td className="px-3.5 py-1.5 text-right">
-                                      <span className="inline-flex items-center gap-0.5 text-[10px] font-black text-indigo-600 hover:text-indigo-800 bg-indigo-50 group-hover:bg-indigo-100/80 px-2 py-0.5 rounded-md transition-all">
-                                        จอง <ChevronRight className="w-2.5 h-2.5" />
-                                      </span>
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
+                                    <span className="inline-flex items-center gap-1 text-xs font-black text-indigo-700 bg-indigo-100/90 px-2.5 py-1 rounded-lg group-hover:bg-indigo-600 group-hover:text-white transition-all shadow-3xs">
+                                      เลือกจอง <ChevronRight className="w-3.5 h-3.5" />
+                                    </span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {/* Desktop View: Polished Table */}
+                          <div className="hidden sm:block border border-slate-200 rounded-2xl overflow-hidden max-h-[420px] overflow-y-auto shadow-xs">
+                            <table className="w-full text-left border-collapse">
+                              <thead className="sticky top-0 bg-slate-100 z-10 border-b border-slate-200">
+                                <tr className="text-[10px] text-slate-600 font-black font-display uppercase tracking-wider">
+                                  <th className="px-3.5 py-2.5 text-center w-12">ลำดับ</th>
+                                  <th className="px-3.5 py-2.5">ชื่อ - นามสกุลพนักงาน</th>
+                                  <th className="px-3.5 py-2.5">ฝ่าย / แผนก</th>
+                                  <th className="px-3.5 py-2.5 text-center w-16">เพศ</th>
+                                  <th className="px-3.5 py-2.5 text-center">สถานะ RSVP</th>
+                                  <th className="px-3.5 py-2.5 text-center">ห้องพัก</th>
+                                  <th className="px-3.5 py-2.5 text-right">ดำเนินการ</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100 bg-white">
+                                {filteredEmployeesForDirectory.map((emp, index) => {
+                                  const rsvp = emp.rsvpStatus || 'ยังไม่ระบุ';
+                                  const isBooked = !!emp.roomId;
+
+                                  return (
+                                    <tr
+                                      key={emp.id}
+                                      onClick={() => {
+                                        setSelectedDeptInput(emp.department);
+                                        setSelectedEmpIdInput(emp.id);
+                                        setLandingError(null);
+                                        setIsLandingDirectoryModalOpen(false);
+                                        document.getElementById('mode-selection-container')?.scrollIntoView({ behavior: 'smooth' });
+                                      }}
+                                      className="text-xs hover:bg-indigo-50/50 transition-colors cursor-pointer group"
+                                    >
+                                      {/* Index */}
+                                      <td className="px-3.5 py-2 text-center text-slate-500 font-bold font-mono">
+                                        {index + 1}
+                                      </td>
+
+                                      {/* Name & ID */}
+                                      <td className="px-3.5 py-2">
+                                        <div className="font-black text-slate-900 text-xs sm:text-sm group-hover:text-indigo-600 transition-colors flex items-center gap-1.5">
+                                          <span>{emp.name}</span>
+                                          <span className="text-[10px] font-bold text-slate-500 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded-md">
+                                            {emp.id}
+                                          </span>
+                                        </div>
+                                      </td>
+
+                                      {/* Department */}
+                                      <td className="px-3.5 py-2">
+                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold bg-slate-50 text-slate-700 border border-slate-200/60">
+                                          <Building2 className="w-3 h-3 text-slate-400" />
+                                          {emp.department}
+                                        </span>
+                                      </td>
+
+                                      {/* Gender */}
+                                      <td className="px-3.5 py-2 text-center">
+                                        <span className={`inline-block px-2 py-0.5 rounded font-black text-[10px] ${
+                                          emp.gender === 'หญิง'
+                                            ? 'bg-rose-50 text-rose-600 border border-rose-100'
+                                            : 'bg-blue-50 text-blue-600 border border-blue-100'
+                                        }`}>
+                                          {emp.gender}
+                                        </span>
+                                      </td>
+
+                                      {/* RSVP */}
+                                      <td className="px-3.5 py-2 text-center">
+                                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-black ${
+                                          rsvp === 'ไป'
+                                            ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                                            : rsvp === 'ไม่ไป'
+                                              ? 'bg-rose-50 text-rose-800 border border-rose-200'
+                                              : 'bg-amber-50 text-amber-800 border border-amber-200'
+                                        }`}>
+                                          <span className={`w-1.5 h-1.5 rounded-full ${
+                                            rsvp === 'ไป' ? 'bg-emerald-500' : rsvp === 'ไม่ไป' ? 'bg-rose-500' : 'bg-amber-500'
+                                          }`} />
+                                          {rsvp === 'ไป' ? 'ไปร่วมทริป' : rsvp === 'ไม่ไป' ? 'สละสิทธิ์' : 'ยังไม่ระบุ'}
+                                        </span>
+                                      </td>
+
+                                      {/* Room status */}
+                                      <td className="px-3.5 py-2 text-center">
+                                        {isBooked ? (
+                                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-black bg-indigo-50 text-indigo-700 border border-indigo-100">
+                                            <Home className="w-3 h-3 text-indigo-500" />
+                                            ห้อง {emp.roomId}
+                                          </span>
+                                        ) : (
+                                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-bold bg-slate-50 text-slate-400">
+                                            ว่าง
+                                          </span>
+                                        )}
+                                      </td>
+
+                                      {/* Quick Selection Link */}
+                                      <td className="px-3.5 py-2 text-right">
+                                        <span className="inline-flex items-center gap-0.5 text-xs font-black text-indigo-600 hover:text-indigo-800 bg-indigo-50 group-hover:bg-indigo-100/90 px-2.5 py-1 rounded-lg transition-all">
+                                          จอง <ChevronRight className="w-3 h-3" />
+                                        </span>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </>
                       )}
                     </div>
                   </div>
@@ -1170,7 +1370,7 @@ export default function App() {
           </div>
         ) : (
           /* Main Application Dashboard */
-          <div className="py-4" id="main-app-views">
+          <div className="py-2" id="main-app-views">
             {syncing && (
               <div className="fixed bottom-4 right-4 bg-slate-950 text-white text-xs font-semibold py-2 px-4 rounded-full flex items-center gap-2 shadow-lg z-50 animate-bounce">
                 <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400" />
@@ -1179,7 +1379,7 @@ export default function App() {
             )}
 
             {/* View switching with smooth animations */}
-            <div className="w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8 lg:py-10">
+            <div className="w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-2 sm:py-4 lg:py-5">
               <AnimatePresence mode="wait">
                 <motion.div
                   key={activeTab}
@@ -1235,10 +1435,24 @@ export default function App() {
                     employees={employees} 
                     rooms={rooms}
                   />
+                ) : activeTab === 'feedback' ? (
+                  <div className="space-y-4">
+                    <TripFeedbackComponent
+                      employees={employees}
+                      feedbacks={feedbacks}
+                      onSubmitFeedback={handleFeedbackSubmit}
+                      userRole={userRole}
+                      selectedEmployeeId={selectedEmployeeId}
+                      selectedDepartment={selectedDepartment}
+                      syncing={syncing}
+                      onSwitchEmployee={handleSwitchRole}
+                    />
+                  </div>
                 ) : (
                   <AdminDashboard
                     employees={employees}
                     rooms={rooms}
+                    feedbacks={feedbacks}
                     sheetConfig={sheetConfig}
                     accessToken={googleToken}
                     onRefreshAll={handleRefreshAll}
@@ -1495,6 +1709,108 @@ export default function App() {
                     <CheckCircle2 className="w-4 h-4 text-emerald-300 fill-emerald-500/20" />
                   )}
                   {syncing ? 'กำลังบันทึก...' : 'ยืนยันตัวตน'}
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
+      {/* Employee Mode Selection Modal */}
+      {showEmployeeModeModal && pendingEmployeeLogin && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-md flex items-center justify-center p-4 z-[120] animate-in fade-in duration-300">
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0, y: 20 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            className="bg-white rounded-[2rem] border-4 border-indigo-50 shadow-[0_25px_60px_-15px_rgba(79,70,229,0.25)] max-w-md w-full p-6 sm:p-8 text-center relative overflow-hidden"
+          >
+            {/* Background elements */}
+            <div className="absolute -top-10 -right-10 w-32 h-32 bg-indigo-50 rounded-full opacity-60 blur-2xl"></div>
+            <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-fuchsia-50 rounded-full opacity-60 blur-2xl"></div>
+
+            <div className="relative z-10 space-y-5">
+              {/* Employee Name Greeting Badge */}
+              {(() => {
+                const emp = employees.find(e => e.id === pendingEmployeeLogin.empId);
+                return (
+                  <div className="inline-flex items-center gap-2 bg-slate-50 border border-slate-200/80 px-3 py-1.5 rounded-full text-xs font-bold text-slate-700">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span>ยินดีต้อนรับ คุณ {emp?.name || pendingEmployeeLogin.empId} ({pendingEmployeeLogin.dept})</span>
+                  </div>
+                );
+              })()}
+
+              <div className="space-y-1">
+                <h3 className="text-xl sm:text-2xl font-black text-slate-900 font-display tracking-tight">
+                  เลือกโหมดการเข้าใช้งาน 🎯
+                </h3>
+                <p className="text-xs text-slate-500 font-semibold">
+                  โปรดเลือกเมนูที่คุณต้องการดำเนินการต่อในระบบ
+                </p>
+              </div>
+
+              {/* Mode Options */}
+              <div className="grid grid-cols-1 gap-3.5 pt-2">
+                {/* Option 1: Visit Website */}
+                <button
+                  type="button"
+                  onClick={() => confirmEmployeeModeChoice('website')}
+                  className="group relative p-4 bg-gradient-to-br from-indigo-50 to-slate-50 hover:from-indigo-600 hover:to-indigo-700 hover:text-white border-2 border-indigo-100 hover:border-indigo-600 rounded-2xl transition-all shadow-sm hover:shadow-lg hover:shadow-indigo-200 text-left cursor-pointer active:scale-98"
+                >
+                  <div className="flex items-start gap-3.5">
+                    <div className="p-3 bg-white group-hover:bg-white/20 text-indigo-600 group-hover:text-white rounded-xl transition-colors shrink-0 shadow-3xs">
+                      <Globe className="w-6 h-6" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-black text-slate-900 group-hover:text-white text-base">
+                          🌐 เข้าเยี่ยมชมเว็บไซต์
+                        </h4>
+                        <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-white/80 group-hover:translate-x-1 transition-all" />
+                      </div>
+                      <p className="text-xs text-slate-500 group-hover:text-indigo-100 mt-1 font-medium leading-relaxed">
+                        เข้าใช้งานระบบจองห้องพัก เลือกห้องพัก ตรวจสอบรายชื่อเพื่อนร่วมทริป และรายละเอียดทริป (ซ่อนเมนูแบบสอบถาม)
+                      </p>
+                    </div>
+                  </div>
+                </button>
+
+                {/* Option 2: Answer Survey */}
+                <button
+                  type="button"
+                  onClick={() => confirmEmployeeModeChoice('survey_only')}
+                  className="group relative p-4 bg-gradient-to-br from-fuchsia-50 to-pink-50 hover:from-fuchsia-600 hover:to-fuchsia-700 hover:text-white border-2 border-fuchsia-100 hover:border-fuchsia-600 rounded-2xl transition-all shadow-sm hover:shadow-lg hover:shadow-fuchsia-200 text-left cursor-pointer active:scale-98"
+                >
+                  <div className="flex items-start gap-3.5">
+                    <div className="p-3 bg-white group-hover:bg-white/20 text-fuchsia-600 group-hover:text-white rounded-xl transition-colors shrink-0 shadow-3xs">
+                      <MessageSquareHeart className="w-6 h-6" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-black text-slate-900 group-hover:text-white text-base flex items-center gap-1.5">
+                          <span>📝 ไปตอบแบบสอบถาม</span>
+                          <span className="text-[9px] bg-emerald-100 group-hover:bg-emerald-400 text-emerald-950 group-hover:text-slate-950 px-1.5 py-0.2 rounded-md font-black">🔓 ปลดล็อคสิทธิ์</span>
+                        </h4>
+                        <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-white/80 group-hover:translate-x-1 transition-all" />
+                      </div>
+                      <p className="text-xs text-slate-500 group-hover:text-fuchsia-100 mt-1 font-medium leading-relaxed">
+                        เปิดเฉพาะหน้าแบบสอบถามประเมินความพึงพอใจ (ปลดล็อคข้อจำกัดเครื่องให้อัตโนมัติ สลับตอบแบบสอบถามแทนท่านอื่นได้ไม่จำกัด)
+                      </p>
+                    </div>
+                  </div>
+                </button>
+              </div>
+
+              {/* Cancel Button */}
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowEmployeeModeModal(false);
+                    setPendingEmployeeLogin(null);
+                  }}
+                  className="w-full py-2.5 text-xs font-bold text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-all cursor-pointer"
+                >
+                  ยกเลิก / ปิดหน้านี้
                 </button>
               </div>
             </div>

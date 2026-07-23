@@ -156,12 +156,12 @@ export default function RoomDirectory({
   };
 
   const handleExportRoomsCsv = () => {
-    const rows = [['ห้องพัก', 'ชื่อห้องพัก/สถานที่', 'ประเภท', 'เพศ', 'ความจุ', 'ผู้เข้าพัก', 'รายชื่อ']];
+    const rows = [['ลำดับที่', 'ชื่อห้องพัก/สถานที่', 'ประเภท', 'เพศ', 'ความจุ', 'ผู้เข้าพัก', 'รายชื่อ']];
     sortedRooms.forEach((room, index) => {
       const occupants = stats.occupantsByRoom[room.id] || [];
       const names = occupants.map(o => `${o.name} (${o.department})`).join('; ');
       rows.push([
-        `ห้องที่ ${index + 1}`,
+        `ลำดับที่ ${index + 1}`,
         room.roomName || '-',
         room.roomType,
         room.genderRestriction,
@@ -191,14 +191,14 @@ export default function RoomDirectory({
   };
 
   return (
-    <div className="space-y-6 pb-20 max-w-7xl mx-auto px-4 py-6">
-      <div className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-100 shrink-0">
-            <Hotel className="w-6 h-6 text-white" />
+    <div className="space-y-4 pb-10 max-w-7xl mx-auto px-4 py-3">
+      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-100 shrink-0">
+            <Hotel className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-slate-800 leading-tight">
+            <h1 className="text-lg sm:text-xl font-bold text-slate-800 leading-tight">
               ทำเนียบห้องพัก (Room Directory)
             </h1>
             <p className="text-slate-500 text-xs mt-1 leading-relaxed">
@@ -213,7 +213,7 @@ export default function RoomDirectory({
             <input
               type="text"
               placeholder="ค้นหาชื่อพนักงาน / ฝ่าย..."
-              className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+              className="w-full pl-9 pr-4 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
               value={empSearchQuery}
               onChange={(e) => setEmpSearchQuery(e.target.value)}
             />
@@ -221,7 +221,7 @@ export default function RoomDirectory({
           <div className="flex items-center gap-2">
             <button
               onClick={handleExportRoomsCsv}
-              className="p-2.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white rounded-2xl transition-all border border-emerald-100 shadow-3xs active:scale-95"
+              className="p-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white rounded-xl transition-all border border-emerald-100 shadow-3xs active:scale-95 text-xs font-bold"
               title="ส่งออก CSV"
             >
               <Download className="w-4 h-4" />
@@ -262,7 +262,7 @@ export default function RoomDirectory({
           <table className="hidden md:table w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-indigo-50 text-indigo-800 font-bold border-b border-indigo-100">
-                <th className="px-3 py-2 border-r border-indigo-100 w-[160px]">ห้องพัก</th>
+                <th className="px-3 py-2 border-r border-indigo-100 w-[160px]">ลำดับที่</th>
                 <th className="px-3 py-2 border-r border-indigo-100 w-[200px]">ประเภท / เงื่อนไข</th>
                 <th className="px-3 py-2 border-r border-indigo-100">รายชื่อผู้เข้าพัก</th>
                 <th className="px-3 py-2 text-center whitespace-nowrap w-[120px]">สถานะ</th>
@@ -279,7 +279,7 @@ export default function RoomDirectory({
                   <tr key={room.id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-3 py-2 align-top border-r border-slate-100">
                       <div className="flex flex-col min-w-0">
-                        <span className="font-bold text-slate-800 text-xs">ห้องที่ {room.sequence !== undefined ? room.sequence : index + 1}</span>
+                        <span className="font-bold text-slate-800 text-xs">ลำดับที่ {room.sequence !== undefined ? room.sequence : index + 1}</span>
                         {room.roomName && (
                           <span className="font-medium text-indigo-700 text-xs whitespace-pre-wrap leading-tight mt-0.5 mb-0.5">{room.roomName}</span>
                         )}
@@ -364,7 +364,7 @@ export default function RoomDirectory({
                 <div key={room.id} className="p-4 space-y-3">
                   <div className="flex justify-between items-start gap-4">
                     <div className="min-w-0">
-                      <h4 className="font-bold text-slate-800 text-xs">ห้องที่ {room.sequence !== undefined ? room.sequence : index + 1}</h4>
+                      <h4 className="font-bold text-slate-800 text-xs">ลำดับที่ {room.sequence !== undefined ? room.sequence : index + 1}</h4>
                       {room.roomName && (
                         <h5 className="font-medium text-indigo-700 text-xs whitespace-pre-wrap leading-tight mt-1">{room.roomName}</h5>
                       )}

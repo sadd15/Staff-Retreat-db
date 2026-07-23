@@ -41,6 +41,31 @@
         "spreadsheetUrl": { "type": "string", "maxLength": 1024 }
       },
       "required": ["rsvpClosed"]
+    },
+    "tripFeedback": {
+      "title": "TripFeedback",
+      "description": "Feedback and survey about the annual trip from employees",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "employeeId": { "type": "string", "maxLength": 128 },
+        "employeeName": { "type": "string", "maxLength": 256 },
+        "department": { "type": "string", "maxLength": 256 },
+        "ratingOverall": { "type": "number" },
+        "ratingAccommodation": { "type": "number" },
+        "ratingFood": { "type": "number" },
+        "ratingActivities": { "type": "number" },
+        "ratingSchedule": { "type": "number" },
+        "ratingRestTime": { "type": "number" },
+        "ratingBeverages": { "type": "number" },
+        "ratingMusic": { "type": "number" },
+        "likedMost": { "type": "string", "maxLength": 2048 },
+        "suggestions": { "type": "string", "maxLength": 2048 },
+        "shoutout": { "type": "string", "maxLength": 2048 },
+        "isAnonymous": { "type": "boolean" },
+        "submittedAt": { "type": "string" }
+      },
+      "required": ["id", "employeeId", "employeeName", "department", "ratingOverall", "ratingAccommodation", "ratingFood", "ratingActivities"]
     }
   },
   "firestore": {
@@ -55,6 +80,10 @@
     "/settings/{settingId}": {
       "schema": "setting",
       "description": "Global settings document"
+    },
+    "/feedbacks/{feedbackId}": {
+      "schema": "tripFeedback",
+      "description": "Employee survey responses and comments"
     }
   }
 }

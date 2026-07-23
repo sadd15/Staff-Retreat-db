@@ -17,7 +17,7 @@ import {
 } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import firebaseConfig from '../../firebase-applet-config.json';
-import { Employee, Room, SheetConfig, MapZone } from '../types';
+import { Employee, Room, SheetConfig, MapZone, TripFeedback } from '../types';
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
@@ -1001,3 +1001,84 @@ export async function resetAllVerificationsInFirestore(): Promise<void> {
     handleFirestoreError(error, OperationType.WRITE, path);
   }
 }
+
+/**
+ * Real-time listener for all Trip Feedbacks
+ */
+export function listenToFeedbacks(callback: (feedbacks: TripFeedback[]) => void): () => void {
+  const path = 'feedbacks';
+  return onSnapshot(collection(db, 'feedbacks'), (snapshot) => {
+    const feedbacks: TripFeedback[] = [];
+    snapshot.forEach(docSnap => {
+      const data = docSnap.data();
+      feedbacks.push({
+        id: docSnap.id,
+        employeeId: data.employeeId || '',
+        employeeName: data.employeeName || '',
+        department: data.department || '',
+        ratingOverall: data.ratingOverall || 0,
+        ratingAccommodation: data.ratingAccommodation || 0,
+        ratingFood: data.ratingFood || 0,
+        ratingActivities: data.ratingActivities || 0,
+        ratingSchedule: data.ratingSchedule || 0,
+        ratingRestTime: data.ratingRestTime || 0,
+        ratingBeverages: data.ratingBeverages || 0,
+        ratingMusic: data.ratingMusic || 0,
+        likedMost: data.likedMost || '',
+        suggestions: data.suggestions || '',
+        shoutout: data.shoutout || '',
+        isAnonymous: data.isAnonymous || false,
+        submittedAt: data.submittedAt ? (data.submittedAt.toDate ? data.submittedAt.toDate() : new Date(data.submittedAt)) : null,
+      });
+    });
+    callback(feedbacks);
+  }, (error) => {
+    handleFirestoreError(error, OperationType.GET, path);
+  });
+}
+
+/**
+ * Submit or update feedback for an employee (keyed by employeeId)
+ */
+export async function submitFeedbackToFirestore(feedback: Omit<TripFeedback, 'id' | 'submittedAt'>): Promise<void> {
+  const path = `feedbacks/${feedback.employeeId}`;
+  try {
+    const feedbackRef = doc(db, 'feedbacks', feedback.employeeId);
+    await setDoc(feedbackRef, {
+      ...feedback,
+      submittedAt: serverTimestamp()
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+/**
+ * Admin action: Delete all feedback documents in Firestore
+ */
+export async function wipeAllFeedbacksInFirestore(): Promise<void> {
+  const path = 'bulk-wipe-feedbacks';
+  try {
+    const snapshot = await getDocs(collection(db, 'feedbacks'));
+    const batch = writeBatch(db);
+    snapshot.forEach(docSnap => {
+      batch.delete(docSnap.ref);
+    });
+    await batch.commit();
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+/**
+ * Admin action: Delete a single feedback document in Firestore
+ */
+export async function deleteFeedbackInFirestore(employeeId: string): Promise<void> {
+  const path = `feedbacks/${employeeId}`;
+  try {
+    await deleteDoc(doc(db, 'feedbacks', employeeId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
+}
+

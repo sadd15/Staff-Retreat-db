@@ -2,8 +2,10 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { storage, updateMapImageUrlInFirestore, updateRoomPositionInFirestore, updateZonesInFirestore, db } from '../lib/firebaseService';
 import { collection, setDoc, doc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { Employee, Room, SheetConfig, MapZone } from '../types';
+import { Employee, Room, SheetConfig, MapZone, TripFeedback } from '../types';
 import ResortMap from './ResortMap';
+import FeedbackAnalytics from './FeedbackAnalytics';
+import SurveyDashboard from './SurveyDashboard';
 import {
   Grid,
   Users,
@@ -55,6 +57,7 @@ import {
 interface AdminDashboardProps {
   employees: Employee[];
   rooms: Room[];
+  feedbacks?: TripFeedback[];
   sheetConfig: SheetConfig | null;
   accessToken: string | null;
   onRefreshAll: () => Promise<void>;
@@ -79,6 +82,7 @@ interface AdminDashboardProps {
 export default function AdminDashboard({
   employees,
   rooms,
+  feedbacks = [],
   sheetConfig,
   accessToken,
   onRefreshAll,
@@ -119,7 +123,7 @@ export default function AdminDashboard({
       }
     }
   };
-  const [activeSubTab, setActiveSubTab] = useState<'layout' | 'settings' | 'map'>('layout');
+  const [activeSubTab, setActiveSubTab] = useState<'layout' | 'settings' | 'map' | 'dashboard'>('layout');
   const [resetting, setResetting] = useState(false);
   const [editingRoom, setEditingRoom] = useState<Room | null>(null);
   const [deletingRoomId, setDeletingRoomId] = useState<string | null>(null);
@@ -734,10 +738,10 @@ export default function AdminDashboard({
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6 font-sans" id="admin-dashboard">
+    <div className="max-w-7xl mx-auto px-4 py-3 font-sans" id="admin-dashboard">
       
       {/* Top statistics panel */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6" id="stats-dashboard-grid">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 mb-4" id="stats-dashboard-grid">
         <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex items-center gap-3.5 hover:border-slate-300 transition-all">
           <div className="w-11 h-11 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 border border-indigo-100/50">
             <Users className="w-5 h-5" />
@@ -794,7 +798,7 @@ export default function AdminDashboard({
       </div>
 
       {/* Visual Analytics Charts Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6" id="admin-charts-section">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4" id="admin-charts-section">
         {/* Chart 1: Bed Occupancy */}
         <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col justify-between">
           <div>
@@ -981,7 +985,7 @@ export default function AdminDashboard({
       </div>
 
       {/* Admin actions & tab selectors */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6 bg-white p-3 rounded-2xl border border-slate-200 shadow-xs">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 mb-4 bg-white p-2.5 rounded-xl border border-slate-200 shadow-xs">
         <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 overflow-x-auto scrollbar-hide">
           <button
             onClick={() => setActiveSubTab('layout')}
@@ -1007,8 +1011,17 @@ export default function AdminDashboard({
               activeSubTab === 'settings' ? 'bg-white text-indigo-600 shadow-xs border border-slate-200/50' : 'text-slate-500 hover:text-slate-800'
             }`}
           >
-            <Sparkles className="w-3.5 h-3.5" />
-            ตั้งค่า / Demo
+            <Settings className="w-3.5 h-3.5" />
+            ตั้งค่าระบบ (Settings)
+          </button>
+          <button
+            onClick={() => setActiveSubTab('dashboard')}
+            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 shrink-0 ${
+              activeSubTab === 'dashboard' ? 'bg-white text-indigo-600 shadow-xs border border-slate-200/50' : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <TrendingUp className="w-3.5 h-3.5 text-indigo-650" />
+            แดชบอร์ดแบบสำรวจ (Survey Dashboard) ✨
           </button>
         </div>
 
@@ -1438,337 +1451,319 @@ export default function AdminDashboard({
         </div>
       )}
 
-      {/* Subtab content 4: System setup / Google Sheets / RSVP Control */}
+      {/* Subtab content: Executive Survey Dashboard (Visualizations) */}
+      {activeSubTab === 'dashboard' && (
+        <div className="bg-white rounded-[2rem] border border-slate-200/60 shadow-xs p-6 sm:p-8 space-y-6" id="dashboard-view-container">
+          <SurveyDashboard feedbacks={feedbacks} employees={employees} />
+        </div>
+      )}
 
       {/* Subtab content 4: System setup / Google Sheets / RSVP Control */}
       {activeSubTab === 'settings' && (
-        <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm p-8 space-y-8" id="settings-view-container">
+        <div className="bg-slate-50/40 rounded-[2rem] border border-slate-200/60 shadow-xs p-6 sm:p-8 space-y-8" id="settings-view-container">
           <div className="max-w-2xl">
-            <h3 className="text-2xl font-display font-black text-slate-800">ตั้งค่าระบบ</h3>
-            <p className="text-sm text-slate-500 mt-1.5 leading-relaxed">
-              จัดการการเชื่อมต่อ Google Sheets และควบคุมการเปิดรับลงทะเบียน RSVP ของพนักงาน
+            <h3 className="text-xl sm:text-2xl font-display font-black text-slate-800 flex items-center gap-2">
+              <Settings className="w-6 h-6 text-indigo-600" />
+              แผงควบคุมและตั้งค่าระบบ (Admin Settings Panel)
+            </h3>
+            <p className="text-xs sm:text-sm text-slate-500 mt-1.5 leading-relaxed font-semibold">
+              จัดระเบียบการซิงค์ข้อมูล Google Sheets ควบคุมการตอบรับเข้าร่วมทริป (RSVP) และกู้คืนข้อมูลระบบอย่างเป็นระบบ ปลอดภัย และเข้าใจง่าย
             </p>
           </div>
 
-          <div className="grid lg:grid-cols-2 gap-8 pt-6 border-t border-slate-100">
-            {/* Google Sheets Management Block */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 pt-6 border-t border-slate-100">
+            
+            {/* COLUMN 1: GOOGLE SHEETS & DATA SYNC */}
             <div className="space-y-6">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-600 border border-emerald-100/60 shadow-xs">
-                  <FileSpreadsheet className="w-5 h-5" />
+              
+              {/* CARD 1.1: Spreadsheet Connection Settings */}
+              <div className="bg-white p-6 rounded-[1.5rem] border border-slate-200 shadow-3xs space-y-4">
+                <div className="flex items-center gap-3 pb-3 border-b border-slate-100">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100">
+                    <FileSpreadsheet className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider font-display">1. จัดการการเชื่อมโยง Google Sheets</h4>
+                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Google Sheets Link & Auth</p>
+                  </div>
                 </div>
-                <div>
-                  <h4 className="text-sm font-black text-slate-800 font-display">การเชื่อมต่อ Google Sheets</h4>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Database Synchronization</p>
-                </div>
-              </div>
 
-              {sheetConfig && sheetConfig.spreadsheetId && !isEditingSheetUrl ? (
-                <div className="bg-slate-50/50 p-6 rounded-[1.5rem] border border-slate-200 space-y-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0">
-                      <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1 flex items-center gap-1.5">
-                        <CheckCircle2 className="w-3 h-3" /> เชื่อมต่อแล้ว
-                      </p>
-                      <h5 className="text-sm font-bold text-slate-800 truncate">{sheetConfig.spreadsheetName}</h5>
-                      <p className="text-[10px] text-slate-400 mt-1 font-mono truncate">{sheetConfig.spreadsheetId}</p>
-                    </div>
-                    <div className="flex gap-1.5">
+                {sheetConfig && sheetConfig.spreadsheetId && !isEditingSheetUrl ? (
+                  <div className="space-y-4">
+                    <div className="p-3.5 bg-emerald-50/40 rounded-2xl border border-emerald-100 flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 text-emerald-700 text-[10px] font-extrabold">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>เชื่อมโยงข้อมูลกับชีตสำเร็จ</span>
+                        </div>
+                        <h5 className="text-xs font-bold text-slate-800 truncate mt-1">{sheetConfig.spreadsheetName}</h5>
+                        <p className="text-[9px] text-slate-400 font-mono truncate mt-0.5">{sheetConfig.spreadsheetId}</p>
+                      </div>
+                      
                       <a
                         href={sheetConfig.spreadsheetUrl}
                         target="_blank"
                         referrerPolicy="no-referrer"
-                        className="shrink-0 p-2 bg-white text-slate-400 hover:text-indigo-600 rounded-xl border border-slate-100 shadow-3xs transition-all"
-                        title="เปิดในแท็บใหม่"
+                        className="shrink-0 p-2.5 bg-white hover:bg-slate-50 text-slate-500 hover:text-emerald-600 rounded-xl border border-slate-200 shadow-3xs transition-all"
+                        title="เปิด Google Sheets ในแท็บใหม่"
                       >
                         <ExternalLink className="w-4 h-4" />
                       </a>
                     </div>
-                  </div>
 
-                    <div className="flex flex-wrap gap-2 pt-2">
-                      {!accessToken ? (
-                        <div className="w-full mb-2 p-3 bg-amber-50 border border-amber-100 rounded-xl flex items-center justify-between gap-3">
-                          <div className="flex items-center gap-2 text-amber-700">
-                            <AlertCircle className="w-4 h-4" />
-                            <span className="text-[10px] font-bold">ยังไม่ได้เชื่อมต่อบัญชี Google สำหรับบันทึกข้อมูล</span>
+                    {/* Google Authorization Status */}
+                    {!accessToken ? (
+                      <div className="p-4 bg-amber-50/70 border border-amber-200 rounded-xl space-y-3">
+                        <div className="flex gap-2.5 text-amber-800">
+                          <AlertCircle className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
+                          <div className="text-[10px] font-bold leading-relaxed">
+                            <p className="text-amber-900 font-extrabold">⚠️ บัญชี Google ยังไม่ได้รับการยืนยันสิทธิ์</p>
+                            <p className="text-amber-600 font-semibold mt-1">แอดมินจะต้องกดยินยอมเพื่อเชื่อมโยง Token ส่วนตัว เพื่ออัปเดตและเขียนทับข้อมูลลงสเปรดชีตได้</p>
                           </div>
-                          <button 
-                            onClick={onSyncToSheet}
-                            className="bg-amber-600 hover:bg-amber-700 text-white text-[10px] font-black py-1.5 px-3 rounded-lg transition-all"
-                          >
-                            เชื่อมต่อตอนนี้
-                          </button>
                         </div>
-                      ) : (
-                        <div className="w-full mb-2 p-2 bg-emerald-50 border border-emerald-100 rounded-xl flex items-center gap-2">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                          <span className="text-[10px] font-bold text-emerald-700">เชื่อมต่อบัญชี Google แล้ว</span>
-                        </div>
-                      )}
-                      <button
-                        onClick={onRefreshAll}
-                        className="flex-1 min-w-[120px] bg-white hover:bg-slate-50 text-slate-700 text-[11px] font-black py-2.5 px-4 rounded-xl border border-slate-200 transition-all shadow-3xs flex items-center justify-center gap-2"
-                      >
-                        <RefreshCw className="w-3.5 h-3.5" />
-                        ดึงข้อมูลจากชีต
-                      </button>
-                      <button
-                        onClick={async () => {
-                          if (confirm('ต้องการเพิ่มหมุดโซนโรงแรมที่ขาดหายไปหรือไม่?')) {
-                            try {
-                              const roomsRef = collection(db, 'rooms');
-                              const hotelRooms = [
-                                { id: 'H127', roomName: 'โซนโรงแรม ห้อง 127', sequence: 17, roomType: 'Hotel Room', capacity: 2, genderRestriction: 'ไม่จำกัด', pricePerNight: 1500, floor: '1', notes: 'โซนโรงแรม 1' },
-                                { id: 'H128', roomName: 'โซนโรงแรม ห้อง 128', sequence: 18, roomType: 'Hotel Room', capacity: 2, genderRestriction: 'ไม่จำกัด', pricePerNight: 1500, floor: '1', notes: 'โซนโรงแรม 1' },
-                                { id: 'H129', roomName: 'โซนโรงแรม ห้อง 129', sequence: 19, roomType: 'Hotel Room', capacity: 2, genderRestriction: 'ไม่จำกัด', pricePerNight: 1500, floor: '1', notes: 'โซนโรงแรม 1' },
-                                { id: 'H131', roomName: 'โซนโรงแรม ห้อง 131-132', sequence: 20, roomType: 'Hotel Room', capacity: 4, genderRestriction: 'ไม่จำกัด', pricePerNight: 3000, floor: '1', notes: 'โซนโรงแรม 1 (ห้องเชื่อม)' },
-                                { id: 'H235', roomName: 'โซนโรงแรม ห้อง 235', sequence: 21, roomType: 'Hotel Room', capacity: 2, genderRestriction: 'ไม่จำกัด', pricePerNight: 1500, floor: '2', notes: 'โซนโรงแรม 2' },
-                                { id: 'H236', roomName: 'โซนโรงแรม ห้อง 236', sequence: 22, roomType: 'Hotel Room', capacity: 2, genderRestriction: 'ไม่จำกัด', pricePerNight: 1500, floor: '2', notes: 'โซนโรงแรม 2' },
-                              ];
-                              for (const hr of hotelRooms) {
-                                await setDoc(doc(roomsRef, hr.id), { ...hr, employees: [] }, { merge: true });
-                              }
-                              alert('เพิ่มหมุดโซนโรงแรมเรียบร้อยแล้ว');
-                              window.location.reload();
-                            } catch (err) {
-                              alert('เกิดข้อผิดพลาด: ' + err);
-                            }
-                          }
-                        }}
-                        className="flex-1 bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-black py-2.5 px-4 rounded-xl border border-amber-600 transition-all shadow-sm flex items-center justify-center gap-2"
-                      >
-                        <Sparkles className="w-3.5 h-3.5" />
-                        เพิ่มหมุดโซนโรงแรมที่ขาด
-                      </button>
-                      <button
-                        onClick={onSyncToSheet}
-                        className="flex-1 min-w-[120px] bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-black py-2.5 px-4 rounded-xl border border-indigo-600 transition-all shadow-sm flex items-center justify-center gap-2"
-                      >
-                        <FileSpreadsheet className="w-3.5 h-3.5" />
-                        บันทึกลง Google Sheet
-                      </button>
-                      <a 
-                        href={sheetConfig.spreadsheetUrl || '#'} 
-                        target="_blank" 
-                        referrerPolicy="no-referrer"
-                        className="flex-1 min-w-[120px] bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-black py-2.5 px-4 rounded-xl shadow-sm transition-all flex items-center justify-center gap-2"
-                      >
-                        <ExternalLink className="w-3.5 h-3.5" />
-                        เปิดสเปรดชีต
-                      </a>
+                        <button 
+                          onClick={onSyncToSheet}
+                          className="w-full bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-black py-2.5 px-3 rounded-lg transition-all shadow-xs flex items-center justify-center gap-1.5"
+                        >
+                          <Lock className="w-3.5 h-3.5" />
+                          เชื่อมต่อบัญชี Google ของท่านทันที
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                        <span className="text-[10px] font-bold text-emerald-700">พร้อมใช้งานสิทธิ์การเขียนข้อมูลลงชีตแล้ว</span>
+                      </div>
+                    )}
+
+                    {/* Secondary Account Action buttons */}
+                    <div className="pt-2 border-t border-slate-100 grid grid-cols-2 gap-2">
                       <button
                         onClick={() => {
                           setNewSheetUrl(sheetConfig.spreadsheetUrl || '');
                           setIsEditingSheetUrl(true);
                         }}
-                        className="flex-1 min-w-[120px] bg-white hover:bg-slate-100 text-slate-600 text-[11px] font-black py-2.5 px-4 rounded-xl border border-slate-200 transition-all shadow-3xs flex items-center justify-center gap-2"
+                        className="bg-white hover:bg-slate-50 text-slate-600 text-[10px] font-bold py-2 px-3 rounded-lg border border-slate-200 transition-all flex items-center justify-center gap-1.5 shadow-3xs"
                       >
-                        <Edit3 className="w-3.5 h-3.5" />
-                        แก้ไขลิงก์
+                        <Edit3 className="w-3.5 h-3.5 text-slate-400" />
+                        แก้ไขลิงก์สเปรดชีต
                       </button>
+
                       <button
                         onClick={() => setShowClearConfirm(true)}
-                        className="bg-white hover:bg-rose-50 text-rose-500 hover:text-rose-600 text-[11px] font-black py-2.5 px-4 rounded-xl border border-slate-200 hover:border-rose-100 transition-all shadow-3xs flex items-center justify-center gap-2"
+                        className="bg-white hover:bg-rose-50 text-slate-600 hover:text-rose-600 text-[10px] font-bold py-2 px-3 rounded-lg border border-slate-200 hover:border-rose-100 transition-all flex items-center justify-center gap-1.5 shadow-3xs"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
-                        ลบลิงก์
+                        <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                        ยกเลิกการเชื่อมต่อชีต
                       </button>
+
                       <button
                         onClick={onChangePin}
-                        className="flex-1 min-w-[120px] bg-slate-800 hover:bg-slate-900 text-white text-[11px] font-black py-2.5 px-4 rounded-xl border border-slate-800 transition-all shadow-sm flex items-center justify-center gap-2"
+                        className="col-span-2 bg-slate-800 hover:bg-slate-900 text-white text-[10px] font-bold py-2 px-3 rounded-lg transition-all flex items-center justify-center gap-1.5 shadow-xs"
                       >
-                        <Lock className="w-3.5 h-3.5" />
-                        เปลี่ยนรหัสผ่าน
+                        <Lock className="w-3.5 h-3.5 text-slate-400" />
+                        เปลี่ยนรหัสผ่านผู้ดูแลระบบ (Admin PIN)
                       </button>
                     </div>
-                </div>
-              ) : (
-                <div className="bg-white p-6 rounded-[1.5rem] border-2 border-dashed border-slate-200 space-y-4">
-                  <div className="text-center py-2">
-                    <div className="w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-300 mx-auto mb-3">
-                      <Plus className="w-6 h-6" />
-                    </div>
-                    <h5 className="text-sm font-bold text-slate-600">
-                      {isEditingSheetUrl ? 'แก้ไขการเชื่อมต่อสเปรดชีต' : 'ยังไม่มีการเชื่อมต่อสเปรดชีต'}
-                    </h5>
-                    <p className="text-[10px] text-slate-400 mt-1">กรอกลิงก์ Google Sheets ด้านล่างเพื่อเริ่มซิงค์ข้อมูล</p>
                   </div>
-                  
-                  <div className="space-y-3">
-                    <input
-                      type="text"
-                      placeholder="วางลิงก์ Google Sheets ที่นี่..."
-                      value={newSheetUrl}
-                      onChange={(e) => setNewSheetUrl(e.target.value)}
-                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:bg-white focus:ring-2 focus:ring-emerald-100 focus:border-emerald-400 transition-all outline-none"
-                    />
-                    <div className="flex gap-2">
-                      {isEditingSheetUrl && (
-                        <button
-                          onClick={() => setIsEditingSheetUrl(false)}
-                          className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[11px] font-black py-3 px-4 rounded-xl transition-all"
-                        >
-                          ยกเลิก
-                        </button>
-                      )}
-                      <button
-                        onClick={async () => {
-                          if (!newSheetUrl.trim()) return;
-                          setIsSyncingSheet(true);
-                          try {
-                            await onSyncSheet(newSheetUrl);
-                            setNewSheetUrl('');
-                            setIsEditingSheetUrl(false);
-                          } finally {
-                            setIsSyncingSheet(false);
-                          }
-                        }}
-                        disabled={!newSheetUrl.trim() || isSyncingSheet}
-                        className="flex-[2] bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-black py-3 px-4 rounded-xl shadow-sm transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-                      >
-                        {isSyncingSheet ? (
-                          <>
-                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                            กำลังตรวจสอบและซิงค์...
-                          </>
-                        ) : (
-                          <>
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            ตรวจสอบและเชื่อมต่อ
-                          </>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="bg-slate-50 p-6 rounded-[1.5rem] border-2 border-dashed border-slate-200 text-center space-y-3">
+                      <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 mx-auto">
+                        <Plus className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h5 className="text-xs font-bold text-slate-700">
+                          {isEditingSheetUrl ? 'แก้ไขการเชื่อมโยง Google Sheet' : 'ยังไม่ระบุลิงก์สเปรดชีต'}
+                        </h5>
+                        <p className="text-[9px] text-slate-400 mt-1 leading-normal font-semibold">กรุณาวางลิงก์ Google Sheets ของคณะเดินทางเพื่อใช้อัปเดตและดึงข้อมูลรายชื่อพนักงาน</p>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <input
+                        type="text"
+                        placeholder="วางลิงก์ Google Sheets (เช่น https://docs.google.com/spreadsheets/...)"
+                        value={newSheetUrl}
+                        onChange={(e) => setNewSheetUrl(e.target.value)}
+                        className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-emerald-100 focus:border-emerald-500 transition-all outline-none text-slate-700"
+                      />
+                      <div className="flex gap-2">
+                        {isEditingSheetUrl && (
+                          <button
+                            onClick={() => setIsEditingSheetUrl(false)}
+                            className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-bold py-2.5 px-4 rounded-xl transition-all"
+                          >
+                            ยกเลิก
+                          </button>
                         )}
+                        <button
+                          onClick={async () => {
+                            if (!newSheetUrl.trim()) return;
+                            setIsSyncingSheet(true);
+                            try {
+                              await onSyncSheet(newSheetUrl);
+                              setNewSheetUrl('');
+                              setIsEditingSheetUrl(false);
+                            } finally {
+                              setIsSyncingSheet(false);
+                            }
+                          }}
+                          disabled={!newSheetUrl.trim() || isSyncingSheet}
+                          className="flex-[2] bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black py-2.5 px-4 rounded-xl shadow-sm transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
+                        >
+                          {isSyncingSheet ? (
+                            <>
+                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                              กำลังประมวลผลลิงก์...
+                            </>
+                          ) : (
+                            <>
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              เชื่อมต่อฐานข้อมูลชีต
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* CARD 1.2: Database Synchronization Actions */}
+              {sheetConfig && sheetConfig.spreadsheetId && !isEditingSheetUrl && (
+                <div className="bg-white p-6 rounded-[1.5rem] border border-slate-200 shadow-3xs space-y-4">
+                  <div className="flex items-center gap-3 pb-3 border-b border-slate-100">
+                    <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100">
+                      <RefreshCw className="w-4 h-4 animate-spin-slow" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider font-display">2. เมนูการซิงโครไนซ์ข้อมูลสองทาง (Two-way Sync)</h4>
+                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Database Sync Operations</p>
+                    </div>
+                  </div>
+
+                  <p className="text-[10px] text-slate-500 font-semibold leading-relaxed">
+                    ระบบแบ่งการซิงค์ข้อมูลอย่างชัดเจนเพื่อป้องกันความสับสน กรุณาเลือกทิศทางที่ต้องการใช้งานด้านล่าง:
+                  </p>
+
+                  <div className="space-y-4">
+                    {/* Operation 1: Pull Data From Sheets */}
+                    <div className="p-4 bg-slate-50/50 hover:bg-slate-50 rounded-2xl border border-slate-100 transition-all space-y-2">
+                      <div className="flex items-start gap-2.5">
+                        <span className="w-5 h-5 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center text-[10px] font-bold shrink-0 font-sans">1</span>
+                        <div>
+                          <h5 className="text-[11px] font-extrabold text-slate-700">ดึงข้อมูลพนักงานจากชีต (Sync FROM Sheet)</h5>
+                          <p className="text-[9px] text-slate-400 mt-0.5 leading-normal">ดึงรายชื่อ ฝ่าย แผนก ชื่อเล่น และสถานะความประสงค์ (RSVP) จาก Google Sheets มาบันทึกเก็บไว้ในระบบแผนที่</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={onRefreshAll}
+                        className="w-full bg-white hover:bg-slate-100 text-indigo-600 text-[10px] font-black py-2.5 px-3 rounded-lg border border-indigo-200 transition-all shadow-3xs flex items-center justify-center gap-1.5"
+                      >
+                        <Download className="w-3.5 h-3.5 text-indigo-500" />
+                        ดึงข้อมูลพนักงาน (อัปเดตรายชื่อ & RSVP เข้าแอป)
+                      </button>
+                    </div>
+
+                    {/* Operation 2: Push Data To Sheets */}
+                    <div className="p-4 bg-indigo-50/10 hover:bg-indigo-50/20 rounded-2xl border border-indigo-100/30 transition-all space-y-2">
+                      <div className="flex items-start gap-2.5">
+                        <span className="w-5 h-5 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-600 flex items-center justify-center text-[10px] font-bold shrink-0 font-sans">2</span>
+                        <div>
+                          <h5 className="text-[11px] font-extrabold text-indigo-900">บันทึกรายงานจัดห้องกลับลงชีต (Sync TO Sheet)</h5>
+                          <p className="text-[9px] text-slate-400 mt-0.5 leading-normal">เขียนสรุปผลแผนผัง "โซนที่พัก" และ "ลำดับที่" รวมถึงรายชื่อเพื่อนร่วมห้องที่แอดมินจัดเสร็จแล้ว กลับไปอัปเดตลง Google Sheets ของบริษัทโดยตรงเพื่อให้ทุกคนตรวจสอบ</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={onSyncToSheet}
+                        className="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black py-2.5 px-3 rounded-lg transition-all shadow-sm flex items-center justify-center gap-1.5"
+                      >
+                        <Upload className="w-3.5 h-3.5 text-indigo-200" />
+                        บันทึกผลการจัดที่พัก (เขียนข้อมูลกลับลง Google Sheets)
                       </button>
                     </div>
                   </div>
                 </div>
               )}
 
-              <div className="p-6 bg-slate-50/70 rounded-[1.5rem] border border-slate-200/80 space-y-4">
-                <div className="flex items-center gap-2 text-indigo-700">
+              {/* CARD 1.3: Seeding / Map Fix tools */}
+              <div className="bg-white p-5 rounded-[1.5rem] border border-slate-200/80 shadow-3xs space-y-3">
+                <div className="flex items-center gap-2 text-slate-700">
                   <Sparkles className="w-4 h-4 text-amber-500" />
-                  <h5 className="text-xs font-black uppercase tracking-wider font-display">
-                    คู่มือตั้งค่าเพื่อเชื่อมต่อ Google Sheet ของคุณ 🚀
-                  </h5>
+                  <h5 className="text-[11px] font-black uppercase tracking-wider font-display">เครื่องมืออำนวยความสะดวกแผนที่</h5>
                 </div>
-                
-                <p className="text-[11px] text-slate-500 leading-relaxed font-semibold">
-                  คุณได้อัปโหลดระบบนี้ขึ้น GitHub เรียบร้อยแล้ว! เพื่อให้ระบบสามารถแก้ไขและบันทึกข้อมูลกลับลง Google Sheet ของคุณได้ทันทีโดยไม่ต้องผ่านส่วนกลาง มีขั้นตอนง่าย ๆ ดังนี้ครับ:
+                <p className="text-[9px] text-slate-400 leading-relaxed font-semibold">
+                  คืนค่าเริ่มต้นให้กับระบบพิกัดแผนผังหรือเติมพิกัดของห้องโซนโรงแรมดั้งเดิม (รหัส H127-H236) หากตรวจพบว่าสูญหายหรือถูกดึงสิทธิ์ออกไปโดยไม่ตั้งใจ:
                 </p>
-
-                <div className="space-y-3.5 pt-1 text-[11px] text-slate-600">
-                  {/* Step 1 */}
-                  <div className="p-3 bg-white rounded-xl border border-slate-100 shadow-3xs space-y-1">
-                    <p className="font-extrabold text-slate-800 flex items-center gap-1.5">
-                      <span className="w-5 h-5 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center text-[10px] border border-emerald-100 font-sans">1</span>
-                      ตั้งค่า Google Sheet เป็นสาธารณะ (สิทธิ์การอ่าน)
-                    </p>
-                    <p className="text-[10px] text-slate-500 leading-relaxed pl-6 font-medium">
-                      เปิดสเปรดชีต Google Sheet &gt; กดปุ่ม <b>"แชร์" (Share)</b> &gt; เปลี่ยนสิทธิ์จาก "จำกัด" (Restricted) เป็น <b>"ทุกคนที่มีลิงก์" (Anyone with the link)</b> &gt; เลือกบทบาทเป็น <b>"ผู้อ่าน" (Viewer)</b> แล้วคัดลอกลิงก์มาวางในช่องระบุด้านบน
-                    </p>
-                  </div>
-
-                  {/* Step 2 */}
-                  <div className="p-3 bg-white rounded-xl border border-slate-100 shadow-3xs space-y-1">
-                    <p className="font-extrabold text-slate-800 flex items-center gap-1.5">
-                      <span className="w-5 h-5 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center text-[10px] border border-indigo-100 font-sans">2</span>
-                      เปิดใช้งาน Google Auth และตั้งค่า Authorized Domains
-                    </p>
-                    <div className="text-[10px] text-slate-500 leading-relaxed pl-6 font-medium space-y-1">
-                      <p>
-                        1. ไปที่หน้า <b>Firebase Console</b> &gt; เมนู <b>Authentication</b> &gt; แท็บ <b>Sign-in method</b> &gt; คลิก <b>Add new provider</b> &gt; เลือก <b>Google</b> &gt; กดสวิตช์ <b>Enable (เปิดใช้งาน)</b> &gt; เลือกอีเมลติดต่อของโครงการและบันทึก
-                      </p>
-                      <p>
-                        2. ในหน้าต่าง <b>Authentication</b> เดียวกัน ให้คลิกไปที่แท็บ <b>Settings</b> &gt; เลือกเมนู <b>Authorized domains</b> ที่แถบด้านซ้าย &gt; คลิกปุ่ม <b>Add domain</b> &gt; ป้อนโดเมน Vercel ของคุณ: <span className="font-mono bg-indigo-50 text-indigo-700 px-1 py-0.5 rounded font-bold">staffretreat-db.vercel.app</span> เพื่อให้ระบบสามารถส่งผ่านข้อมูลการเข้าสู่ระบบได้อย่างปลอดภัย
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Step 3 */}
-                  <div className="p-3 bg-white rounded-xl border border-slate-100 shadow-3xs space-y-1">
-                    <p className="font-extrabold text-slate-800 flex items-center gap-1.5">
-                      <span className="w-5 h-5 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center text-[10px] border border-amber-100 font-sans">3</span>
-                      นำชุดคีย์การตั้งค่า (Firebase Config) ไปใส่ในไฟล์ระบบ
-                    </p>
-                    <div className="text-[10px] text-slate-500 leading-relaxed pl-6 font-medium space-y-1">
-                      <p>
-                        1. กดไอคอนรูปฟันเฟือง ⚙️ (Project settings) ที่มุมซ้ายบนของ Firebase Console
-                      </p>
-                      <p>
-                        2. เลื่อนลงมาด้านล่างสุดที่หัวข้อ <b>Your apps</b> &gt; คลิกไอคอนเว็บ <b>(&lt;/&gt;)</b> เพื่อลงทะเบียนเว็บแอปพลิเคชัน (เช่น ตั้งชื่อว่า <span className="font-mono bg-slate-100 px-1 rounded">staffretreat-web</span>)
-                      </p>
-                      <p>
-                        3. คัดลอกค่าต่าง ๆ จากตัวแปร <span className="font-mono text-amber-600">firebaseConfig</span> ไปใส่แทนที่ในไฟล์คีย์หลัก <span className="font-mono bg-slate-100 px-1 text-slate-700 font-bold">/firebase-applet-config.json</span> ของคุณโดยให้มีลักษณะดังนี้:
-                      </p>
-                      <pre className="mt-1 p-2 bg-slate-900 text-slate-200 rounded-lg text-[9px] font-mono overflow-x-auto leading-normal">
-{`{
-  "projectId": "ไอดีโปรเจกต์ของคุณ",
-  "appId": "ไอดีแอปของคุณ",
-  "apiKey": "คีย์ API ของคุณ",
-  "authDomain": "โดเมน auth (เช่น xxx.firebaseapp.com)",
-  "firestoreDatabaseId": "(default)",
-  "storageBucket": "xxx.firebasestorage.app",
-  "messagingSenderId": "รหัสผู้ส่งข้อความ",
-  "measurementId": "",
-  "oAuthClientId": "",
-  "recaptchaSiteKey": ""
-}`}
-                      </pre>
-                    </div>
-                  </div>
-
-                  {/* Step 4 */}
-                  <div className="p-3 bg-white rounded-xl border border-slate-100 shadow-3xs space-y-1">
-                    <p className="font-extrabold text-slate-800 flex items-center gap-1.5">
-                      <span className="w-5 h-5 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center text-[10px] border border-rose-100 font-sans">4</span>
-                      อัปเดตโค้ดไปยัง GitHub เพื่ออัปเกรดอัตโนมัติบน Vercel
-                    </p>
-                    <p className="text-[10px] text-slate-500 leading-relaxed pl-6 font-medium">
-                      แก้ไขไฟล์ <span className="font-mono bg-slate-100 px-1 font-bold">/firebase-applet-config.json</span> บน GitHub ของคุณให้เป็นข้อมูลของ Firebase ตัวใหม่ &gt; ระบบ Vercel จะดึงไปติดตั้งและเริ่มทำงานทันที (Auto-Deploy) คุณจะเข้าใช้งานผ่านลิงก์ <a href="https://staffretreat-db.vercel.app/" target="_blank" rel="noreferrer" className="text-indigo-600 underline font-bold">https://staffretreat-db.vercel.app/</a> และกดขอสิทธิ์เขียน Google Sheet ได้ทันที!
-                    </p>
-                  </div>
-                </div>
-
-                <div className="p-3 bg-indigo-50/50 rounded-xl border border-indigo-100/50 text-[10px] text-indigo-700 font-bold leading-relaxed">
-                  💡 <b>ทำไมระบบต้องการสิ่งนี้?</b> เนื่องจากระบบออกแบบมาเพื่อความปลอดภัยสูงสุดและไร้รอยต่อ บัญชี Google ของแอดมินที่กดบันทึกข้อมูลจะถูกใช้เพื่อขอ Access Token มาเขียนข้อมูลลงชีตโดยตรง (Direct OAuth) ข้อมูลจึงไม่ต้องไหลผ่านเซิร์ฟเวอร์ของผู้อื่น มั่นใจได้ว่าข้อมูลพนักงานปลอดภัย 100% ครับ!
-                </div>
+                <button
+                  onClick={async () => {
+                    if (confirm('คุณต้องการเพิ่มพิกัด/หมุดห้องพักโซนโรงแรมที่ขาดหายไปกลับเข้าสู่แผนที่หรือไม่?')) {
+                      try {
+                        const roomsRef = collection(db, 'rooms');
+                        const hotelRooms = [
+                          { id: 'H127', roomName: 'โซนโรงแรม ห้อง 127', sequence: 17, roomType: 'Hotel Room', capacity: 2, genderRestriction: 'ไม่จำกัด', pricePerNight: 1500, floor: '1', notes: 'โซนโรงแรม 1' },
+                          { id: 'H128', roomName: 'โซนโรงแรม ห้อง 128', sequence: 18, roomType: 'Hotel Room', capacity: 2, genderRestriction: 'ไม่จำกัด', pricePerNight: 1500, floor: '1', notes: 'โซนโรงแรม 1' },
+                          { id: 'H129', roomName: 'โซนโรงแรม ห้อง 129', sequence: 19, roomType: 'Hotel Room', capacity: 2, genderRestriction: 'ไม่จำกัด', pricePerNight: 1500, floor: '1', notes: 'โซนโรงแรม 1' },
+                          { id: 'H131', roomName: 'โซนโรงแรม ห้อง 131-132', sequence: 20, roomType: 'Hotel Room', capacity: 4, genderRestriction: 'ไม่จำกัด', pricePerNight: 3000, floor: '1', notes: 'โซนโรงแรม 1 (ห้องเชื่อม)' },
+                          { id: 'H235', roomName: 'โซนโรงแรม ห้อง 235', sequence: 21, roomType: 'Hotel Room', capacity: 2, genderRestriction: 'ไม่จำกัด', pricePerNight: 1500, floor: '2', notes: 'โซนโรงแรม 2' },
+                          { id: 'H236', roomName: 'โซนโรงแรม ห้อง 236', sequence: 22, roomType: 'Hotel Room', capacity: 2, genderRestriction: 'ไม่จำกัด', pricePerNight: 1500, floor: '2', notes: 'โซนโรงแรม 2' },
+                        ];
+                        for (const hr of hotelRooms) {
+                          await setDoc(doc(roomsRef, hr.id), { ...hr, employees: [] }, { merge: true });
+                        }
+                        alert('เพิ่มพิกัดห้องโซนโรงแรมเสร็จสมบูรณ์');
+                        window.location.reload();
+                      } catch (err) {
+                        alert('เกิดข้อผิดพลาด: ' + err);
+                      }
+                    }
+                  }}
+                  className="w-full bg-amber-50 hover:bg-amber-100 text-amber-700 hover:text-amber-800 text-[10px] font-bold py-2.5 px-3 rounded-xl border border-amber-200 transition-all flex items-center justify-center gap-1.5"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-amber-500 animate-pulse" />
+                  เพิ่มพิกัดหมุดแผนที่โซนโรงแรมดั้งเดิม (H127 - H236)
+                </button>
               </div>
+
             </div>
 
-            {/* RSVP Control Center Section */}
+            {/* COLUMN 2: REGISTRATION CONTROL, BACKUP, & DANGER ZONE */}
             <div className="space-y-6">
-              <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-2xl flex items-center justify-center border shadow-xs transition-all ${
-                  rsvpClosed ? 'bg-rose-50 text-rose-600 border-rose-100' : 'bg-amber-50 text-amber-600 border-amber-100'
-                }`}>
-                  {rsvpClosed ? <Lock className="w-5 h-5" /> : <Clock className="w-5 h-5" />}
-                </div>
-                <div>
-                  <h4 className="text-sm font-black text-slate-800 font-display">ควบคุมการลงทะเบียน RSVP</h4>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Registration Status</p>
-                </div>
-              </div>
-
-              <div className={`p-6 rounded-[1.5rem] border transition-all space-y-4 ${
-                rsvpClosed ? 'bg-rose-50/30 border-rose-100' : 'bg-slate-50/50 border-slate-200'
-              }`}>
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className={`w-2 h-2 rounded-full animate-pulse ${rsvpClosed ? 'bg-rose-500' : 'bg-emerald-500'}`} />
-                    <span className={`text-[10px] font-black uppercase tracking-widest ${rsvpClosed ? 'text-rose-600' : 'text-emerald-600'}`}>
-                      {rsvpClosed ? 'ปิดรับคำตอบแล้ว' : 'กำลังเปิดรับคำตอบ'}
-                    </span>
+              
+              {/* CARD 2.1: RSVP Registration Switcher */}
+              <div className="bg-white p-6 rounded-[1.5rem] border border-slate-200 shadow-3xs space-y-4">
+                <div className="flex items-center gap-3 pb-3 border-b border-slate-100">
+                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center border ${
+                    rsvpClosed ? 'bg-rose-50 text-rose-600 border-rose-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                  }`}>
+                    {rsvpClosed ? <Lock className="w-4 h-4" /> : <Clock className="w-4 h-4 animate-pulse" />}
                   </div>
-                  <p className="text-[11px] text-slate-500 leading-relaxed font-bold">
-                    {rsvpClosed 
-                      ? 'พนักงานจะไม่สามารถระบุความประสงค์ "ไป" หรือ "ไม่ไป" ได้เพิ่มเติม ข้อมูลจะถูกล็อคเพื่อเตรียมสรุปยอดจัดห้องพัก' 
-                      : 'พนักงานสามารถเข้ามาระบุสถานะความประสงค์ได้ตามปกติ ข้อมูลจะซิงค์เข้าสู่ระบบแบบเรียลไทม์'}
-                  </p>
+                  <div>
+                    <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider font-display">3. สิทธิ์เปิดรับลงทะเบียนความประสงค์ (RSVP)</h4>
+                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Registration Status Control</p>
+                  </div>
+                </div>
+
+                <div className={`p-4 rounded-xl border transition-all flex items-start gap-3 ${
+                  rsvpClosed ? 'bg-rose-50/40 border-rose-100' : 'bg-emerald-50/20 border-emerald-100/60'
+                }`}>
+                  <span className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${rsvpClosed ? 'bg-rose-500 animate-pulse' : 'bg-emerald-500 animate-ping'}`} />
+                  <div className="space-y-1">
+                    <p className={`text-[10px] font-black uppercase tracking-wider ${rsvpClosed ? 'text-rose-600' : 'text-emerald-600'}`}>
+                      สถานะปัจจุบัน: {rsvpClosed ? 'CLOSED (ปิดล็อคระบบความประสงค์)' : 'OPEN (กำลังเปิดรับการตอบกลับ)'}
+                    </p>
+                    <p className="text-[9px] text-slate-500 font-medium leading-normal">
+                      {rsvpClosed 
+                        ? 'ขณะนี้ข้อมูลการตอบสละสิทธิ์หรือตอบรับการเดินทางถูกแช่แข็งแล้ว พนักงานจะไม่สามารถเปลี่ยนแปลงข้อมูลของตนเองได้ แอดมินสามารถดำเนินการจัดที่พักได้อย่างแม่นยำ' 
+                        : 'พนักงานสามารถล็อกอินเข้ามาระบุว่าตนเองจะเดินทางไปทริปนี้หรือไม่ พร้อมระบุชื่อคู่พักได้ตามอัธยาศัย โดยข้อมูลจะอัปเดตแบบเรียลไทม์'}
+                    </p>
+                  </div>
                 </div>
 
                 <button
                   onClick={() => onToggleRSVPClosed(!rsvpClosed)}
-                  className={`w-full text-xs font-black py-3.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 ${
+                  className={`w-full text-xs font-black py-3 px-4 rounded-xl transition-all shadow-xs flex items-center justify-center gap-2 ${
                     rsvpClosed 
                       ? 'bg-emerald-600 hover:bg-emerald-700 text-white' 
                       : 'bg-rose-600 hover:bg-rose-700 text-white'
@@ -1776,152 +1771,227 @@ export default function AdminDashboard({
                 >
                   {rsvpClosed ? (
                     <>
-                      <Unlock className="w-4 h-4" />
-                      เปิดรับคำตอบ RSVP ทันที
+                      <Unlock className="w-4 h-4 text-emerald-200" />
+                      เปิดระบบตอบรับลงทะเบียนความประสงค์ (RSVP)
                     </>
                   ) : (
                     <>
-                      <Lock className="w-4 h-4" />
-                      ปิดรับคำตอบและล็อคข้อมูล
+                      <Lock className="w-4 h-4 text-rose-200" />
+                      ปิดล็อคผลและปิดระบบรับ RSVP ทันที
                     </>
                   )}
                 </button>
               </div>
 
-              {/* Backup & Restore Section */}
-              <div className="pt-6 space-y-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 border border-indigo-100/60 shadow-xs">
-                    <Database className="w-5 h-5" />
+              {/* CARD 2.2: Database Backup & Restore */}
+              <div className="bg-white p-6 rounded-[1.5rem] border border-slate-200 shadow-3xs space-y-4">
+                <div className="flex items-center gap-3 pb-3 border-b border-slate-100">
+                  <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100">
+                    <Database className="w-4 h-4" />
                   </div>
                   <div>
-                    <h4 className="text-sm font-black text-slate-800 font-display">สำรองและกู้คืนข้อมูล</h4>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Backup & Restore</p>
+                    <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider font-display">4. ระบบสำรองและฟื้นฟูข้อมูลภายใน</h4>
+                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Database Backup & Restore</p>
                   </div>
                 </div>
 
-                <div className="p-5 bg-indigo-50/25 rounded-[1.5rem] border border-indigo-100/50 space-y-4">
-                  <p className="text-[11px] text-slate-500 leading-relaxed font-bold">
-                    คุณสามารถดาวน์โหลดข้อมูลทั้งหมด (ห้องพักและรายชื่อการจอง) เก็บไว้เป็นไฟล์สำรองข้อมูลส่วนตัวแบบ JSON หรือนำมาอัปโหลดเพื่อกู้คืนข้อมูลทั้งหมดของระบบได้ทันที
-                  </p>
+                <p className="text-[10px] text-slate-500 leading-relaxed font-semibold">
+                  สำรองโครงสร้างข้อมูลทั้งหมด (ผังที่จัด และพนักงาน) บันทึกเก็บเป็นไฟล์ JSON ลงคอมพิวเตอร์ของคุณเพื่อนำกลับมาอัปโหลดฟื้นฟูข้อมูลเมื่อจำเป็น:
+                </p>
 
-                  <div className="flex flex-col sm:flex-row gap-3">
-                    {/* Backup Download Button */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        try {
-                          const backupData = {
-                            rooms,
-                            employees,
-                            backupDate: new Date().toISOString()
+                <div className="flex flex-col sm:flex-row gap-3">
+                  {/* Backup Download Button */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      try {
+                        const backupData = {
+                          rooms,
+                          employees,
+                          backupDate: new Date().toISOString()
+                        };
+                        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData, null, 2));
+                        const downloadAnchor = document.createElement('a');
+                        downloadAnchor.setAttribute("href", dataStr);
+                        downloadAnchor.setAttribute("download", `backup_staffretreat_${new Date().toISOString().split('T')[0]}.json`);
+                        document.body.appendChild(downloadAnchor);
+                        downloadAnchor.click();
+                        downloadAnchor.remove();
+                      } catch (err: any) {
+                        alert(`เกิดข้อผิดพลาดในการสำรองข้อมูล: ${err.message}`);
+                      }
+                    }}
+                    className="flex-1 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 hover:border-indigo-300 text-[10px] font-bold py-2.5 px-4 rounded-xl shadow-3xs transition-all flex items-center justify-center gap-1.5"
+                  >
+                    <Download className="w-4 h-4 text-indigo-500" />
+                    ดาวน์โหลดไฟล์สำรอง (.json)
+                  </button>
+
+                  {/* Restore Upload Button */}
+                  <label className="flex-1 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 hover:border-emerald-300 text-[10px] font-bold py-2.5 px-4 rounded-xl shadow-3xs transition-all flex items-center justify-center gap-1.5 cursor-pointer text-center">
+                    <Upload className="w-4 h-4 text-emerald-500" />
+                    อัปโหลดไฟล์กู้คืนระบบ (.json)
+                    <input
+                      type="file"
+                      accept=".json"
+                      onChange={async (e) => {
+                        const fileReader = new FileReader();
+                        if (e.target.files && e.target.files[0]) {
+                          fileReader.readAsText(e.target.files[0], "UTF-8");
+                          fileReader.onload = async (event) => {
+                            try {
+                              const parsedData = JSON.parse(event.target?.result as string);
+                              if (!parsedData.rooms || !parsedData.employees) {
+                                alert("รูปแบบไฟล์สำรองไม่ถูกต้อง กรุณาเลือกไฟล์ที่ดาวน์โหลดจากระบบนี้เท่านั้น");
+                                return;
+                              }
+                              if (confirm(`⚠️ ยืนยันเขียนทับฐานข้อมูล?\n\nการนำเข้าจะเขียนทับข้อมูลห้องพัก (${parsedData.rooms.length} ห้อง) และรายชื่อพนักงาน (${parsedData.employees.length} คน) ปัจจุบันทั้งหมด\n\nต้องการยืนยันกระบวนการนี้ใช่หรือไม่?`)) {
+                                await onUpdateRooms(parsedData.rooms);
+                                await onUpdateEmployees(parsedData.employees);
+                                alert("🎉 กู้คืนโครงสร้างข้อมูลสำเร็จเรียบร้อย");
+                              }
+                            } catch (err: any) {
+                              alert(`เกิดข้อผิดพลาดในการนำเข้าข้อมูล: ${err.message}`);
+                            }
                           };
-                          const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData, null, 2));
-                          const downloadAnchor = document.createElement('a');
-                          downloadAnchor.setAttribute("href", dataStr);
-                          downloadAnchor.setAttribute("download", `backup_staffretreat_${new Date().toISOString().split('T')[0]}.json`);
-                          document.body.appendChild(downloadAnchor);
-                          downloadAnchor.click();
-                          downloadAnchor.remove();
-                        } catch (err: any) {
-                          alert(`เกิดข้อผิดพลาดในการสำรองข้อมูล: ${err.message}`);
                         }
                       }}
-                      className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-black py-2.5 px-4 rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 font-display"
-                    >
-                      <Download className="w-4 h-4" />
-                      ดาวน์โหลดไฟล์สำรอง (.json)
-                    </button>
-
-                    {/* Restore Upload Button */}
-                    <label className="flex-1 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-[11px] font-black py-2.5 px-4 rounded-xl shadow-3xs transition-all flex items-center justify-center gap-2 cursor-pointer text-center font-display">
-                      <Upload className="w-4 h-4 text-indigo-500" />
-                      นำเข้าไฟล์เพื่อกู้คืน (.json)
-                      <input
-                        type="file"
-                        accept=".json"
-                        onChange={async (e) => {
-                          const fileReader = new FileReader();
-                          if (e.target.files && e.target.files[0]) {
-                            fileReader.readAsText(e.target.files[0], "UTF-8");
-                            fileReader.onload = async (event) => {
-                              try {
-                                const parsedData = JSON.parse(event.target?.result as string);
-                                if (!parsedData.rooms || !parsedData.employees) {
-                                  alert("รูปแบบไฟล์สำรองข้อมูลไม่ถูกต้อง กรุณาเลือกไฟล์ที่ดาวน์โหลดจากระบบนี้");
-                                  return;
-                                }
-                                if (confirm(`⚠️ ยืนยันการกู้คืนข้อมูล?\n\nการกระทำนี้จะเขียนทับข้อมูลห้องพัก (${parsedData.rooms.length} ห้อง) และพนักงาน (${parsedData.employees.length} คน) ทั้งหมดในระบบปัจจุบันด้วยข้อมูลจากไฟล์สำรอง!`)) {
-                                  await onUpdateRooms(parsedData.rooms);
-                                  await onUpdateEmployees(parsedData.employees);
-                                  alert("🎉 กู้คืนข้อมูลและอัปเดตระบบเรียบร้อยแล้ว!");
-                                }
-                              } catch (err: any) {
-                                alert(`เกิดข้อผิดพลาดในการนำเข้าข้อมูล: ${err.message}`);
-                              }
-                            };
-                          }
-                        }}
-                        className="hidden"
-                      />
-                    </label>
-                  </div>
+                      className="hidden"
+                    />
+                  </label>
                 </div>
               </div>
 
-              {/* Reset System Button */}
-              <div className="pt-6 space-y-3">
-                <button
-                  onClick={() => setShowResetConfirm(true)}
-                  className="w-full group p-4 bg-white hover:bg-rose-50 border border-slate-200 hover:border-rose-100 rounded-2xl transition-all text-left flex items-center justify-between"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-xl bg-slate-50 group-hover:bg-rose-100 text-slate-400 group-hover:text-rose-600 flex items-center justify-center transition-colors">
-                      <RefreshCw className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <h5 className="text-[11px] font-black text-slate-700 group-hover:text-rose-700 uppercase tracking-wider">ล้างข้อมูลการจองห้อง</h5>
-                      <p className="text-[9px] font-bold text-slate-400 mt-0.5">ลบสถานะห้องพักของทุกคนออก แต่ข้อมูลชื่อพนักงานยังคงอยู่</p>
-                    </div>
+              {/* CARD 2.3: Red Danger Zone (Destructive resets, clearly categorized) */}
+              <div className="bg-rose-50/20 border border-rose-200 p-6 rounded-[1.5rem] space-y-4">
+                <div className="flex items-center gap-3 pb-3 border-b border-rose-100">
+                  <div className="w-9 h-9 rounded-xl bg-rose-100/70 text-rose-600 flex items-center justify-center border border-rose-100">
+                    <AlertTriangle className="w-4 h-4 text-rose-600" />
                   </div>
-                  <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-rose-400" />
-                </button>
+                  <div>
+                    <h4 className="text-xs font-black text-rose-800 uppercase tracking-wider font-display">🚨 เมนูล้างทำความสะอาดระบบ (Danger Zone)</h4>
+                    <p className="text-[9px] font-bold text-rose-400 uppercase tracking-widest">Database Reset Actions</p>
+                  </div>
+                </div>
 
-                {sheetConfig?.spreadsheetId && onCleanSyncSheet && (
-                  <button
-                    onClick={() => setShowCleanSyncConfirm(true)}
-                    className="w-full group p-4 bg-white hover:bg-rose-50 border border-slate-200 hover:border-rose-100 rounded-2xl transition-all text-left flex items-center justify-between"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-xl bg-slate-50 group-hover:bg-rose-100 text-slate-400 group-hover:text-rose-600 flex items-center justify-center transition-colors">
-                        <Trash2 className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <h5 className="text-[11px] font-black text-slate-700 group-hover:text-rose-700 uppercase tracking-wider">ล้างข้อมูลพนักงาน & ซิงค์ใหม่ (Clean Re-sync)</h5>
-                        <p className="text-[9px] font-bold text-slate-400 mt-0.5">ลบรายชื่อพนักงานทั้งหมดในฐานข้อมูล แล้วดึงรายชื่อใหม่จาก Google Sheets อย่างสะอาด</p>
-                      </div>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-rose-400" />
-                  </button>
-                )}
+                <p className="text-[9px] text-rose-700 font-bold leading-normal">
+                  คำสั่งทั้งหมดในกลุ่มนี้จะลบหรือเขียนทับข้อมูลอย่างถาวร แอดมินโปรดใช้ความระมัดระวังในการใช้งาน:
+                </p>
 
-                {onWipeAllEmployees && (
-                  <button
-                    onClick={() => setShowWipeEmployeesConfirm(true)}
-                    className="w-full group p-4 bg-white hover:bg-rose-50 border border-slate-200 hover:border-rose-100 rounded-2xl transition-all text-left flex items-center justify-between"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-xl bg-slate-50 group-hover:bg-rose-100 text-slate-400 group-hover:text-rose-600 flex items-center justify-center transition-colors">
-                        <UserX className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <h5 className="text-[11px] font-black text-slate-700 group-hover:text-rose-700 uppercase tracking-wider">ลบข้อมูลรายชื่อพนักงานทั้งหมด</h5>
-                        <p className="text-[9px] font-bold text-slate-400 mt-0.5">ลบรายชื่อพนักงานและล้างการจองห้องพักทั้งหมดออกจากระบบทันที</p>
-                      </div>
+                <div className="space-y-3">
+                  
+                  {/* Action 1: Reset Room Assignments Only */}
+                  <div className="bg-white rounded-xl p-3 border border-rose-100/50 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-3xs">
+                    <div className="space-y-0.5">
+                      <h5 className="text-[10px] font-black text-slate-700 uppercase tracking-wider">1. ล้างสถานะจัดห้องเท่านั้น (ล้างผลจัดสรร)</h5>
+                      <p className="text-[9px] text-slate-400 leading-normal font-semibold">ลบพนักงานออกจากห้องพักทุกห้อง เพื่อเริ่มต้นจัดที่พักใหม่จากศูนย์ โดยที่<b>รายชื่อพนักงานและผลลงทะเบียนความประสงค์จะไม่ถูกลบ</b></p>
                     </div>
-                    <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-rose-400" />
-                  </button>
-                )}
+                    <button
+                      onClick={() => setShowResetConfirm(true)}
+                      className="shrink-0 bg-white hover:bg-rose-50 text-slate-600 hover:text-rose-600 border border-slate-200 hover:border-rose-200 px-3 py-2 rounded-lg text-[10px] font-black transition-all flex items-center justify-center gap-1 shadow-3xs"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      ล้างการจัดห้อง
+                    </button>
+                  </div>
+
+                  {/* Action 2: Clean Re-sync */}
+                  {sheetConfig?.spreadsheetId && onCleanSyncSheet && (
+                    <div className="bg-white rounded-xl p-3 border border-rose-100/50 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-3xs">
+                      <div className="space-y-0.5">
+                        <h5 className="text-[10px] font-black text-slate-700 uppercase tracking-wider">2. ล้างข้อมูลพนักงานและซิงค์ใหม่ (Clean Re-sync)</h5>
+                        <p className="text-[9px] text-slate-400 leading-normal font-semibold">ล้างรายชื่อพนักงานเก่าทั้งหมดในแอป แล้วเริ่มดึงรายชื่อใหม่เอี่ยมจาก Google Sheet (<b>การจัดห้องและ RSVP ของทุกคนจะถูกลบใหม่หมด</b>)</p>
+                      </div>
+                      <button
+                        onClick={() => setShowCleanSyncConfirm(true)}
+                        className="shrink-0 bg-white hover:bg-rose-50 text-slate-600 hover:text-rose-600 border border-slate-200 hover:border-rose-200 px-3 py-2 rounded-lg text-[10px] font-black transition-all flex items-center justify-center gap-1 shadow-3xs"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        ล้างและดึงใหม่
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Action 3: Wipe All Employees */}
+                  {onWipeAllEmployees && (
+                    <div className="bg-white rounded-xl p-3 border border-rose-100/50 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-3xs">
+                      <div className="space-y-0.5">
+                        <h5 className="text-[10px] font-black text-slate-700 uppercase tracking-wider">3. ล้างรายชื่อพนักงานออกจากฐานข้อมูลทั้งหมด</h5>
+                        <p className="text-[9px] text-slate-400 leading-normal font-semibold">ลบฐานข้อมูลรายชื่อพนักงานทั้งหมด ข้อมูลจัดคู่ และสถานะตอบรับออกจากระบบทั้งหมดโดยถาวร (<b>ทำให้ฐานข้อมูลของแอปพลิเคชันว่างเปล่าทันที</b>)</p>
+                      </div>
+                      <button
+                        onClick={() => setShowWipeEmployeesConfirm(true)}
+                        className="shrink-0 bg-rose-600 hover:bg-rose-700 text-white px-3 py-2 rounded-lg text-[10px] font-black transition-all flex items-center justify-center gap-1 shadow-xs"
+                      >
+                        <UserX className="w-3.5 h-3.5 text-rose-200" />
+                        ลบพนักงานทั้งหมด
+                      </button>
+                    </div>
+                  )}
+
+                </div>
+              </div>
+
+            </div>
+
+          </div>
+          
+          {/* Detailed Google Sheet Manual */}
+          <div className="p-6 bg-slate-50/70 rounded-[1.5rem] border border-slate-200/80 space-y-4">
+            <div className="flex items-center gap-2 text-indigo-700">
+              <Sparkles className="w-4 h-4 text-amber-500" />
+              <h5 className="text-xs font-black uppercase tracking-wider font-display">
+                คู่มือตั้งค่าเพื่อเชื่อมต่อ Google Sheet ของคุณ 🚀
+              </h5>
+            </div>
+            
+            <p className="text-[11px] text-slate-500 leading-relaxed font-semibold">
+              ระบบนี้รองรับการซิงค์ข้อมูลลงทะเบียนและผลการจัดที่พักแบบสองทาง เพื่อความปลอดภัยสูงสุดโดยการส่งผ่าน Token ของคุณเองโดยตรง มีขั้นตอนดังนี้ครับ:
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-[11px] text-slate-600">
+              {/* Step 1 */}
+              <div className="p-3 bg-white rounded-xl border border-slate-100 shadow-3xs space-y-1">
+                <p className="font-extrabold text-slate-800 flex items-center gap-1.5">
+                  <span className="w-5 h-5 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center text-[10px] border border-emerald-100 font-sans">1</span>
+                  ตั้งสิทธิ์แชร์ Google Sheet เป็น "ทุกคนที่มีลิงก์"
+                </p>
+                <p className="text-[10px] text-slate-500 leading-relaxed pl-6 font-medium">
+                  เปิดสเปรดชีต Google Sheet &gt; กดปุ่ม <b>"แชร์" (Share)</b> &gt; เปลี่ยนสิทธิ์จาก "จำกัด" เป็น <b>"ทุกคนที่มีลิงก์" (Anyone with the link)</b> &gt; เลือกสิทธิ์เป็น <b>"ผู้อ่าน" (Viewer)</b> แล้วคัดลอกลิงก์มาวางในส่วนตั้งค่าบนระบบ
+                </p>
+              </div>
+
+              {/* Step 2 */}
+              <div className="p-3 bg-white rounded-xl border border-slate-100 shadow-3xs space-y-1">
+                <p className="font-extrabold text-slate-800 flex items-center gap-1.5">
+                  <span className="w-5 h-5 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center text-[10px] border border-indigo-100 font-sans">2</span>
+                  เปิดใช้งาน Google Auth ใน Firebase
+                </p>
+                <p className="text-[10px] text-slate-500 leading-relaxed pl-6 font-medium">
+                  ไปที่หน้า <b>Firebase Console</b> &gt; เมนู <b>Authentication</b> &gt; เพิ่มผู้ให้บริการเข้าสู่ระบบ <b>Google</b> &gt; ไปที่แท็บ <b>Settings (หรือ Authorized domains)</b> ป้อนโดเมน <span className="font-mono bg-indigo-50 text-indigo-700 px-1 py-0.5 rounded font-bold">staffretreat-db.vercel.app</span> ลงในรายการโดเมนที่ได้รับอนุญาต เพื่อสิทธิ์การล็อกอินที่ปลอดภัย
+                </p>
+              </div>
+
+              {/* Step 3 */}
+              <div className="p-3 bg-white rounded-xl border border-slate-100 shadow-3xs space-y-1">
+                <p className="font-extrabold text-slate-800 flex items-center gap-1.5">
+                  <span className="w-5 h-5 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center text-[10px] border border-amber-100 font-sans">3</span>
+                  ใส่ Config ของ Firebase ใน /firebase-applet-config.json
+                </p>
+                <p className="text-[10px] text-slate-500 leading-relaxed pl-6 font-medium">
+                  คัดลอกค่า JSON <span className="font-mono text-amber-600">firebaseConfig</span> จากการลงทะเบียนแอปใน Firebase ไปใส่แทนที่ในไฟล์หลักของโครงการคุณ เพื่อให้ระบบสามารถระบุตัวตนและเชื่อมต่อคลาวด์ของคุณได้ 100%
+                </p>
+              </div>
+
+              {/* Step 4 */}
+              <div className="p-3 bg-white rounded-xl border border-slate-100 shadow-3xs space-y-1">
+                <p className="font-extrabold text-slate-800 flex items-center gap-1.5">
+                  <span className="w-5 h-5 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center text-[10px] border border-rose-100 font-sans">4</span>
+                  เข้าใช้งานระบบ Vercel เพื่อความปลอดภัยข้อมูล
+                </p>
+                <p className="text-[10px] text-slate-500 leading-relaxed pl-6 font-medium">
+                  เมื่อระบบอัปเดตไฟล์กำหนดค่าแล้ว คุณสามารถเข้าใช้งานผ่าน Vercel และทำการกดเข้าสู่ระบบผ่านบัญชี Google ของตัวแอดมิน เพื่อขอสิทธิ์การเขียนข้อมูลลงชีตได้โดยปลอดภัย ข้อมูลทั้งหมดจะไม่ไหลผ่านเซิร์ฟเวอร์คนอื่น ปลอดภัย 100%!
+                </p>
               </div>
             </div>
           </div>

@@ -54,3 +54,23 @@ export interface BookingSummary {
   rsvpNotGoingCount: number;
   rsvpPendingCount: number;
 }
+
+export interface TripFeedback {
+  id: string; // Unique ID (e.g. employeeId)
+  employeeId: string;
+  employeeName: string;
+  department: string;
+  ratingOverall: number; // 1 to 5
+  ratingAccommodation: number; // 1 to 5
+  ratingFood: number; // 1 to 5
+  ratingActivities: number; // 1 to 5
+  ratingSchedule: number; // 1 to 5
+  ratingRestTime: number; // 1 to 5
+  ratingBeverages: number; // 1 to 5
+  ratingMusic: number; // 1 to 5
+  likedMost?: string;
+  suggestions?: string;
+  shoutout?: string;
+  isAnonymous: boolean;
+  submittedAt: any;
+}
